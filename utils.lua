@@ -42,4 +42,24 @@ function M.map(list, func)
    return mapped
 end
 
+function M.dump(o, level)
+  -- a shitty pretty print implementation
+  level = level or 0
+  if type(o) == 'table' then
+    local l = string.rep('  ', level)
+    local s = l .. '{\n'
+    local c = l .. '}'
+    for k,v in pairs(o) do
+      if type(k) ~= 'number' then
+        k = '"'..tostring(k)..'"'
+      end
+      s = s .. l .. '['..tostring(k)..'] = ' .. my_utils.dump(v, level + 1) .. ',\n'
+    end
+    return s .. c
+   else
+    return tostring(o)
+   end
+end
+
+
 return M

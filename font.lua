@@ -1,29 +1,6 @@
-local wezterm = require 'wezterm'
-
-local font_size = 18
-local bold = true
-local font_family = ({
-       'Iosevka Nerd Font Mono', -- [1]
-       'JetBrainsMono Nerd Font', -- [2]
-       'FiraCode Nerd Font Mono', -- [3]
-       'Photonico Code', -- [4]
-       'VictorMono Nerd Font', -- [5]
-       'Hurmit Nerd Font Mono', -- [6]
-       'Gintronic', -- [7]
-       'Monocraft', -- [8]
-       'Comic Mono', -- [9]
-       'Input Mono', -- [10]
-       'ComicCode Nerd Font Mono', -- [11]
-    })[10]
-
-local options = {}
-if bold then
-   options['weight'] = 'Bold'
-end
-
-local font = wezterm.font(font_family, options)
-
+local wezterm = require('wezterm')
 return {
-   font      = font,
-   font_size = font_size,
+  font_size = 14,
+
+  font = wezterm.font("Operator Mono Lig", {weight="Book"}),
 }
