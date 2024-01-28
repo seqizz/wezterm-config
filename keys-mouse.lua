@@ -1,11 +1,23 @@
-local wezterm = require 'wezterm';
+local wezterm = require('wezterm')
 return {
   keys = {
     -- mux start
-    { key = '-', mods = 'ALT', action = wezterm.action({ SplitVertical = { domain = 'CurrentPaneDomain' } }) },
-    { key = '|', mods = 'ALT', action = wezterm.action({ SplitHorizontal = { domain = 'CurrentPaneDomain' } }) },
+    {
+      key = '-',
+      mods = 'ALT',
+      action = wezterm.action({ SplitVertical = { domain = 'CurrentPaneDomain' } }),
+    },
+    {
+      key = '|',
+      mods = 'ALT',
+      action = wezterm.action({ SplitHorizontal = { domain = 'CurrentPaneDomain' } }),
+    },
     { key = 'z', mods = 'ALT', action = 'TogglePaneZoomState' },
-    { key = 'n', mods = 'ALT', action = wezterm.action({ SpawnTab = 'CurrentPaneDomain' }) },
+    {
+      key = 'n',
+      mods = 'ALT',
+      action = wezterm.action.SpawnCommandInNewTab({ cwd = wezterm.home_dir, domain = 'CurrentPaneDomain' }),
+    },
     { key = 'LeftArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Left' }) },
     { key = 'DownArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Down' }) },
     { key = 'UpArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Up' }) },
@@ -41,6 +53,16 @@ return {
     -- mux end
     { key = 'Return', mods = 'ALT', action = 'DisableDefaultAssignment' },
     { key = 'n', mods = 'SUPER', action = 'DisableDefaultAssignment' },
+    {
+      key = 'f',
+      mods = 'ALT',
+      action = wezterm.action.Search('CurrentSelectionOrEmptyString'),
+    },
+    {
+      key = 'v',
+      mods = 'ALT',
+      action = wezterm.action.ActivateCopyMode,
+    },
 
     -- standalone start
     -- {key="1", mods="ALT", action="DisableDefaultAssignment"},
@@ -93,20 +115,49 @@ return {
     -- mux reference end
   },
 
+  key_tables = {
+    copy_mode = {
+      {
+        key = 'v',
+        mods = 'SHIFT',
+        action = wezterm.action.CopyMode({ SetSelectionMode = 'Line' }),
+      },
+      {
+        key = 'Escape',
+        mods = 'NONE',
+        action = wezterm.action.CopyMode('Close'),
+      },
+      { key = 'LeftArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveLeft' }) },
+      { key = 'RightArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveRight' }) },
+      { key = 'UpArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveUp' }) },
+      { key = 'DownArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveDown' }) },
+      {
+        key = 'y',
+        mods = 'NONE',
+        action = wezterm.action.Multiple({
+          wezterm.action({ CopyTo = 'ClipboardAndPrimarySelection' }),
+          wezterm.action({ CopyMode = 'Close' }),
+        }),
+      },
+      { key = 'PageDown', mods = 'NONE', action = wezterm.action.CopyMode 'PageDown' },
+      { key = 'PageUp', mods = 'NONE', action = wezterm.action.CopyMode 'PageUp' },
+    },
+  },
+
   mouse_bindings = {
     -- Change the default click behavior so that it only selects
     -- text and doesn't open hyperlinks
     {
-      event={Up={streak=1, button="Left"}},
-      mods="NONE",
-      action=wezterm.action{CompleteSelection="PrimarySelection"},
+      event = { Up = { streak = 1, button = 'Left' } },
+      mods = 'NONE',
+      action = wezterm.action({ CompleteSelection = 'PrimarySelection' }),
     },
 
     -- and make CTRL-Click open hyperlinks
     {
-      event={Up={streak=1, button="Left"}},
-      mods="CTRL",
-      action="OpenLinkAtMouseCursor",
+      event = { Up = { streak = 1, button = 'Left' } },
+      mods = 'CTRL',
+      action = 'OpenLinkAtMouseCursor',
     },
   },
 }
