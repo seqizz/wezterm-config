@@ -40,7 +40,7 @@ local function render_battery(battery)
   return string.format('%s %s', get_icon(), formatted_percent)
 end
 
-local function update_right_status(window)
+local function update_right_status(window, pane)
   -- "Wed Mar 3 08:14"
   --- @type string
   local date = wezterm.strftime('%a %b %-d %H:%M')
@@ -55,7 +55,7 @@ local function update_right_status(window)
   local hostname = wezterm.format({
     { Background = { AnsiColor = 'Grey' } },
     { Foreground = { AnsiColor = 'White' } },
-    { Text = string.format(' %s ', wezterm.hostname()) },
+    { Text = string.format(' %s ', pane:get_domain_name()) },
   })
 
   --- @type string
