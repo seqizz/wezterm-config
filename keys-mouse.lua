@@ -59,7 +59,7 @@ return {
       action = wezterm.action.Search('CurrentSelectionOrEmptyString'),
     },
     {
-      key = 'v',
+      key = 'Escape',
       mods = 'ALT',
       action = wezterm.action.ActivateCopyMode,
     },
