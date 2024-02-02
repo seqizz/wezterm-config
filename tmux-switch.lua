@@ -1,3 +1,7 @@
+-- if we get 'wezterm_disabletabs' user variable set to anything:
+-- - hide tab bar
+-- - disable keys which would conflict with tmux
+
 local wezterm = require('wezterm')
 dofile('/devel/wezterm-config/keys-common.lua') -- brings "common_keys" into scope
 tmux_keys = {
@@ -23,7 +27,6 @@ tmux_keys = {
 return {
   wezterm.on('user-var-changed', function(window, pane, name, value)
     wezterm.log_info('var', name, value)
-    -- TODO: define all keys depending on this, not overriding single keys here
     if name == 'wezterm_disabletabs' then
       window:set_config_overrides({
         hide_tab_bar_if_only_one_tab = true,
