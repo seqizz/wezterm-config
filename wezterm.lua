@@ -9,7 +9,7 @@ local modules = utils.map({
   'theme',
   'tab',
   'mux',
-  'uservar',
+  'tmux-switch',
   -- 'secret', -- no agent forwarding yet
   'keys-mouse',
   'colors',

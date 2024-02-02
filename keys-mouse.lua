@@ -1,119 +1,60 @@
 local wezterm = require('wezterm')
-return {
-  keys = {
-    -- mux start
-    {
-      key = '-',
-      mods = 'ALT',
-      action = wezterm.action({ SplitVertical = { domain = 'CurrentPaneDomain' } }),
-    },
-    {
-      key = '|',
-      mods = 'ALT',
-      action = wezterm.action({ SplitHorizontal = { domain = 'CurrentPaneDomain' } }),
-    },
-    { key = 'z', mods = 'ALT', action = 'TogglePaneZoomState' },
-    {
-      key = 'n',
-      mods = 'ALT',
-      action = wezterm.action.SpawnCommandInNewTab({ cwd = wezterm.home_dir, domain = 'CurrentPaneDomain' }),
-    },
-    { key = 'LeftArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Left' }) },
-    { key = 'DownArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Down' }) },
-    { key = 'UpArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Up' }) },
-    { key = 'RightArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Right' }) },
-    { key = 'a', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Left', 2 } }) },
-    { key = 's', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Down', 2 } }) },
-    { key = 'w', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Up', 2 } }) },
-    { key = 'd', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Right', 2 } }) },
-    { key = '1', mods = 'ALT', action = wezterm.action.ActivateTab(0) },
-    { key = '2', mods = 'ALT', action = wezterm.action.ActivateTab(1) },
-    { key = '3', mods = 'ALT', action = wezterm.action.ActivateTab(2) },
-    { key = '4', mods = 'ALT', action = wezterm.action.ActivateTab(3) },
-    { key = '5', mods = 'ALT', action = wezterm.action.ActivateTab(4) },
-    { key = '6', mods = 'ALT', action = wezterm.action.ActivateTab(5) },
-    { key = '7', mods = 'ALT', action = wezterm.action.ActivateTab(6) },
-    { key = '8', mods = 'ALT', action = wezterm.action.ActivateTab(7) },
-    { key = '9', mods = 'ALT', action = wezterm.action.ActivateTab(8) },
-    { key = 'k', mods = 'ALT', action = wezterm.action.CloseCurrentTab({ confirm = true }) },
-    -- mux end
-
-    -- Turn off the defaults
-    { key = '=', mods = 'CTRL', action = 'DisableDefaultAssignment' },
-    { key = 'RightArrow', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
-    { key = 'Tab', mods = 'CTRL', action = 'DisableDefaultAssignment' },
-    { key = 'Tab', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
-    { key = 'Tab', mods = 'SHIFT', action = 'DisableDefaultAssignment' },
-    { key = 'LeftArrow', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
-    { key = 'F', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
-    { key = 'P', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
-    -- mux start
-    { key = ' ', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
-    { key = 'Enter', mods = 'ALT', action = 'DisableDefaultAssignment' },
-    -- mux end
-    { key = 'Return', mods = 'ALT', action = 'DisableDefaultAssignment' },
-    { key = 'n', mods = 'SUPER', action = 'DisableDefaultAssignment' },
-    {
-      key = 'f',
-      mods = 'ALT',
-      action = wezterm.action.Search('CurrentSelectionOrEmptyString'),
-    },
-    {
-      key = 'Escape',
-      mods = 'ALT',
-      action = wezterm.action.ActivateCopyMode,
-    },
-
-    -- standalone start
-    -- {key="1", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="2", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="3", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="4", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="5", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="6", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="7", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="8", mods="ALT", action="DisableDefaultAssignment"},
-    -- {key="9", mods="ALT", action="DisableDefaultAssignment"},
-    --standalone end
-
-    -- Assign new
-    -- @Reference see above
-    -- {key="A", mods="ALT", action=wezterm.action_callback(
-    -- function(window, pane)
-    -- send_signal(pane, '-USR1')
-    -- end
-    -- )},
-    { key = 'x', mods = 'ALT', action = 'QuickSelect' },
-    { key = '+', mods = 'CTRL', action = 'IncreaseFontSize' },
-    { key = '4', mods = 'CTRL', action = 'IncreaseFontSize' },
-    { key = '-', mods = 'CTRL', action = 'DecreaseFontSize' },
-    { key = '0', mods = 'CTRL', action = 'ResetFontSize' },
-    { key = 'Delete', mods = 'SHIFT', action = wezterm.action({ PasteFrom = 'PrimarySelection' }) },
-    { key = 'V', mods = 'CTRL', action = wezterm.action({ PasteFrom = 'Clipboard' }) },
-    -- Alt-c to "click" links without mouse
-    {
-      key = 'c',
-      mods = 'ALT',
-      action = wezterm.action.QuickSelectArgs({
-        label = 'open url',
-        patterns = {
-          -- A bit more proper regex for URLs, at least to clickable ones
-          'https?://[A-Za-z0-9$_+:/?@&,;%=.-]+',
-        },
-        action = wezterm.action_callback(function(window, pane)
-          local url = window:get_selection_text_for_pane(pane)
-          wezterm.log_info('opening: ' .. url)
-          wezterm.open_with(url)
-        end),
-      }),
-    },
-    -- mux reference start
-    -- {key="RightArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-right"}},
-    -- {key="LeftArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-left"}},
-    -- {key="UpArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-up"}},
-    -- {key="DownArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-down"}},
-    -- mux reference end
+dofile('/devel/wezterm-config/keys-common.lua') -- brings "common_keys" into scope
+mux_keys = {
+  {
+    key = '-',
+    mods = 'ALT',
+    action = wezterm.action({ SplitVertical = { domain = 'CurrentPaneDomain' } }),
   },
+  {
+    key = '|',
+    mods = 'ALT',
+    action = wezterm.action({ SplitHorizontal = { domain = 'CurrentPaneDomain' } }),
+  },
+  {
+    key = 'n',
+    mods = 'ALT',
+    action = wezterm.action.SpawnCommandInNewTab({ cwd = wezterm.home_dir, domain = 'CurrentPaneDomain' }),
+  },
+  { key = 'LeftArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Left' }) },
+  { key = 'DownArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Down' }) },
+  { key = 'UpArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Up' }) },
+  { key = 'RightArrow', mods = 'ALT', action = wezterm.action({ ActivatePaneDirection = 'Right' }) },
+  { key = 'a', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Left', 2 } }) },
+  { key = 's', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Down', 2 } }) },
+  { key = 'w', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Up', 2 } }) },
+  { key = 'd', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Right', 2 } }) },
+  { key = '1', mods = 'ALT', action = wezterm.action.ActivateTab(0) },
+  { key = '2', mods = 'ALT', action = wezterm.action.ActivateTab(1) },
+  { key = '3', mods = 'ALT', action = wezterm.action.ActivateTab(2) },
+  { key = '4', mods = 'ALT', action = wezterm.action.ActivateTab(3) },
+  { key = '5', mods = 'ALT', action = wezterm.action.ActivateTab(4) },
+  { key = '6', mods = 'ALT', action = wezterm.action.ActivateTab(5) },
+  { key = '7', mods = 'ALT', action = wezterm.action.ActivateTab(6) },
+  { key = '8', mods = 'ALT', action = wezterm.action.ActivateTab(7) },
+  { key = '9', mods = 'ALT', action = wezterm.action.ActivateTab(8) },
+  { key = 'k', mods = 'ALT', action = wezterm.action.CloseCurrentTab({ confirm = true }) },
+  {
+    key = 'f',
+    mods = 'ALT',
+    action = wezterm.action.Search('CurrentSelectionOrEmptyString'),
+  },
+  {
+    key = 'Escape',
+    mods = 'ALT',
+    action = wezterm.action.ActivateCopyMode,
+  },
+
+  -- mux @Reference start (see above)
+  -- {key="RightArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-right"}},
+  -- {key="LeftArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-left"}},
+  -- {key="UpArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-up"}},
+  -- {key="DownArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-down"}},
+  -- mux reference end
+}
+return {
+
+  keys = concat_table(mux_keys, common_keys),
 
   key_tables = {
     copy_mode = {
@@ -139,8 +80,8 @@ return {
           wezterm.action({ CopyMode = 'Close' }),
         }),
       },
-      { key = 'PageDown', mods = 'NONE', action = wezterm.action.CopyMode 'PageDown' },
-      { key = 'PageUp', mods = 'NONE', action = wezterm.action.CopyMode 'PageUp' },
+      { key = 'PageDown', mods = 'NONE', action = wezterm.action.CopyMode('PageDown') },
+      { key = 'PageUp', mods = 'NONE', action = wezterm.action.CopyMode('PageUp') },
     },
   },
 
