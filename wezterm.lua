@@ -9,6 +9,7 @@ local modules = utils.map({
   'theme',
   'tab',
   'mux',
+  'uservar',
   -- 'secret', -- no agent forwarding yet
   'keys-mouse',
   'colors',
