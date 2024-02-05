@@ -68,6 +68,11 @@ return {
         mods = 'NONE',
         action = wezterm.action.CopyMode('Close'),
       },
+      {
+        key = 'Escape',
+        mods = 'ALT',
+        action = wezterm.action.CopyMode('Close'),
+      },
       { key = 'LeftArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveLeft' }) },
       { key = 'RightArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveRight' }) },
       { key = 'UpArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveUp' }) },
