@@ -93,6 +93,11 @@ return {
       { key = 'PageDown', mods = 'NONE', action = wezterm.action.CopyMode('PageDown') },
       { key = 'PageUp', mods = 'NONE', action = wezterm.action.CopyMode('PageUp') },
     },
+    search_mode = {
+      { key = 'Enter', mods = 'NONE', action = wezterm.action.CopyMode 'PriorMatch' },
+      { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode 'NextMatch' },
+      { key = 'Escape', mods = 'NONE', action = wezterm.action.CopyMode 'Close' },
+    },
   },
 
   mouse_bindings = {
