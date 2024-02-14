@@ -9,7 +9,7 @@ wezterm.on('format-window-title', function(tab, pane, tabs, panes, config)
 
   local index = ''
   if #tabs > 1 or domain_name == 'default' then
-    index = string.format('[%s][%d] ', active_pane:get_domain_name() , #tabs)
+    index = string.format('[%s][%d] ', active_pane:get_domain_name(), #tabs)
   end
 
   return index .. tab.active_pane.title
