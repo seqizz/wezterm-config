@@ -22,7 +22,7 @@ return {
     left = padding,
     right = padding,
     top = padding,
-    bottom = padding,
+    bottom = 1, -- 4 is too much
   },
   window_background_image_hsb = {
     brightness = 0.3,
