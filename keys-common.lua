@@ -36,7 +36,7 @@ common_keys = {
       label = 'open url',
       patterns = {
         -- A bit more proper regex for URLs, at least to clickable ones
-        'https?://[A-Za-z0-9$_+:/?@&,;%=.-]+',
+        'https?://[A-Za-z0-9$_+:/?#@&,;%=.-]+',
       },
       action = wezterm.action_callback(function(window, pane)
         local url = window:get_selection_text_for_pane(pane)
