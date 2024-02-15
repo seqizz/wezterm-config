@@ -59,6 +59,21 @@ return {
   key_tables = {
     copy_mode = {
       {
+        key = 'LeftArrow',
+        mods = 'CTRL',
+        action = wezterm.action({ CopyMode = 'MoveBackwardWord' }),
+      },
+      {
+        key = 'RightArrow',
+        mods = 'CTRL',
+        action = wezterm.action({ CopyMode = 'MoveForwardWord' }),
+      },
+      {
+        key = 'v',
+        mods = 'NONE',
+        action = wezterm.action.CopyMode({ SetSelectionMode = 'Cell' }),
+      },
+      {
         key = 'v',
         mods = 'SHIFT',
         action = wezterm.action.CopyMode({ SetSelectionMode = 'Line' }),
@@ -99,9 +114,9 @@ return {
       { key = 'PageUp', mods = 'NONE', action = wezterm.action.CopyMode('PageUp') },
     },
     search_mode = {
-      { key = 'Enter', mods = 'NONE', action = wezterm.action.CopyMode 'PriorMatch' },
-      { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode 'NextMatch' },
-      { key = 'Escape', mods = 'NONE', action = wezterm.action.CopyMode 'Close' },
+      { key = 'Enter', mods = 'NONE', action = wezterm.action.CopyMode('PriorMatch') },
+      { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode('NextMatch') },
+      { key = 'Escape', mods = 'NONE', action = wezterm.action.CopyMode('Close') },
     },
   },
 
