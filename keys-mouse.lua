@@ -69,6 +69,11 @@ return {
         action = wezterm.action.CopyMode('Close'),
       },
       {
+        key = 'c',
+        mods = 'CTRL',
+        action = wezterm.action.CopyMode('Close'),
+      },
+      {
         key = 'Enter',
         mods = 'NONE',
         action = wezterm.action.CopyMode('Close'),

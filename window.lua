@@ -36,7 +36,7 @@ return {
       source = {
         File = wezterm.home_dir .. "/.config/wezterm/assets/layer0.jpg"
       },
-      opacity = 0.5,
+      opacity = 0.8,
       repeat_x = 'Mirror',
       hsb = dimmer,
       attachment = { Parallax = 0.01 },
