@@ -31,36 +31,48 @@ return {
   text_background_opacity = 1.0,
   adjust_window_size_when_changing_font_size = false,
   background = {
-    { source = { Color = '#282828' }, opacity = 1, width = '100%', height = '100%' },
-    {
-      source = {
-        File = wezterm.home_dir .. "/.config/wezterm/assets/layer0.jpg"
-      },
-      opacity = 0.8,
-      repeat_x = 'Mirror',
-      hsb = dimmer,
-      attachment = { Parallax = 0.01 },
-    },
-    {
-      source = {
-        File = wezterm.home_dir .. "/.config/wezterm/assets/layer1.png",
-      },
-      width = '100%',
-      repeat_x = 'NoRepeat',
-      hsb = dimmer,
-      attachment = { Parallax = 0.3 },
-    },
-    {
-      source = {
-        File = wezterm.home_dir .. "/.config/wezterm/assets/layer2.png",
-      },
-      width = '100%',
-      repeat_x = 'NoRepeat',
-      opacity = 0.6,
-      vertical_offset = 500,
-      repeat_y_size = '300%',
-      hsb = dimmer,
-      attachment = { Parallax = 0.8 },
-    },
+    { source = { Color = '#282828' }, opacity = 0.95, width = '100%', height = '100%' },
+    -- {
+    --   source = {
+    --     File = wezterm.home_dir .. "/.config/wezterm/assets/layer0.jpg"
+    --   },
+    --   opacity = 0.6,
+    --   repeat_x = 'Mirror',
+    --   hsb = dimmer,
+    --   attachment = { Parallax = 0.01 },
+    -- },
+    -- {
+    --   source = {
+    --     File = wezterm.home_dir .. "/.config/wezterm/assets/layer1.png",
+    --   },
+    --   width = '50%',
+    --   repeat_x = 'Repeat',
+    --   attachment = { Parallax = 0.3 },
+    -- },
+    -- {
+    --   source = {
+    --     File = wezterm.home_dir .. "/.config/wezterm/assets/layer2.png",
+    --   },
+    --   width = '50%',
+    --   repeat_x = 'Repeat',
+    --   repeat_y_size = '300%',
+    --   attachment = { Parallax = 0.5 },
+    -- },
+    -- {
+    --   source = {
+    --     File = wezterm.home_dir .. "/.config/wezterm/assets/plane.png",
+    --   },
+    --   width = '3cell',
+    --   height = '15cell',
+    --   repeat_x = 'NoRepeat',
+    --   repeat_y = 'NoRepeat',
+    --   hsb = dimmer,
+    --   opacity = 0.4,
+    --   horizontal_align = 'Right',
+    --   horizontal_offset = -30,
+    --   vertical_offset = 1000,
+    --   repeat_y_size = '500%',
+    --   attachment = { Parallax = 0.8 },
+    -- },
   },
 }
