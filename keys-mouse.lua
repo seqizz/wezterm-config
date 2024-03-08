@@ -84,6 +84,11 @@ return {
         action = wezterm.action.CopyMode('Close'),
       },
       {
+        key = '?',
+        mods = 'SHIFT',
+        action = wezterm.action.Search('CurrentSelectionOrEmptyString'),
+      },
+      {
         key = 'c',
         mods = 'CTRL',
         action = wezterm.action.CopyMode('Close'),
@@ -116,7 +121,10 @@ return {
     search_mode = {
       { key = 'Enter', mods = 'NONE', action = wezterm.action.CopyMode('PriorMatch') },
       { key = 'Enter', mods = 'SHIFT', action = wezterm.action.CopyMode('NextMatch') },
-      { key = 'Escape', mods = 'NONE', action = wezterm.action.CopyMode('Close') },
+      { key = 'Escape', mods = 'NONE', action = wezterm.action.Multiple({
+        wezterm.action({ CopyMode = 'ClearPattern' }),
+        wezterm.action({ CopyMode = 'Close' }),
+      })},
     },
   },
 
