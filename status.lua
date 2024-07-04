@@ -23,7 +23,7 @@ local function render_battery(battery)
     --- @type string
     local icon_name
 
-    if percent == 1 then
+    if percent > 0.9 then
       icon_name = prefix
     else
       local suffix = math.max(1, math.ceil(percent * 10)) .. '0'
