@@ -1,5 +1,6 @@
 local wezterm = require('wezterm')
-dofile('/devel/wezterm-config/keys-common.lua') -- brings "common_keys" into scope
+-- TODO: make this relative to the current file, fucking lua
+dofile('/home/gurkan/.config/wezterm/keys-common.lua') -- brings "common_keys" into scope
 mux_keys = {
   {
     key = '-',

@@ -1,62 +1,34 @@
 local wezterm = require('wezterm')
 local utils = require('utils')
 
+local MAX_TAB_WIDTH = 30
+local MAX_TEXT_LENGTH = math.max(18, MAX_TAB_WIDTH - 7)
+
 local CONFIG = {
   padding = 1,
   use_icons = true,
-  use_icon_colors = true,
+  use_icon_colors = false,  -- TODO: fucks up foreground color of the text
 }
 
-local function numberStyle(number, script)
-  local scripts = {
-    superscript = {
-      '⁰',
-      '¹',
-      '²',
-      '³',
-      '⁴',
-      '⁵',
-      '⁶',
-      '⁷',
-      '⁸',
-      '⁹',
-    },
-    subscript = {
-      '₀',
-      '₁',
-      '₂',
-      '₃',
-      '₄',
-      '₅',
-      '₆',
-      '₇',
-      '₈',
-      '₉',
-    },
-  }
-  local numbers = scripts[script]
-  local number_string = tostring(number)
-  local result = ''
-  for i = 1, #number_string do
-    local char = number_string:sub(i, i)
-    local num = tonumber(char)
-    if num then
-      result = result .. numbers[num + 1]
-    else
-      result = result .. char
-    end
-  end
-  return result
+local function dump(o)
+   if type(o) == 'table' then
+      local s = '{ '
+      for k,v in pairs(o) do
+         if type(k) ~= 'number' then k = '"'..k..'"' end
+         s = s .. '['..k..'] = ' .. dump(v) .. ','
+      end
+      return s .. '} '
+   else
+      return tostring(o)
+   end
 end
 
---- @type table<number, string>
 local tab_icons = {}
 
 local function ansi(c) return { AnsiColor = c } end
 
 local function css(c) return { Color = c } end
 
---- @type string
 local sep = wezterm.format({
   { Foreground = { AnsiColor = 'Fuchsia' } },
   { Text = '┊' },
@@ -90,7 +62,7 @@ local icon_variants = utils.map({
   { 'fae_donut', css('#FAAFBE') },
   'fae_popcorn',
   'fae_poison',
-  {'linux_nixos', css('#7095F7')},
+  { 'linux_nixos', css('#7095F7') },
   'linux_gentoo',
   { 'fae_radioactive', css('#A49B72') },
   { 'fae_ruby', css('#E0115F') },
@@ -127,33 +99,110 @@ function tab_title(tab_info)
   end
   -- Otherwise, use the title from the active pane
   -- in that tab
-  return string.sub(tab_info.active_pane.title, 1, 18)
+  return string.sub(tab_info.active_pane.title, 1, MAX_TEXT_LENGTH)
 end
 
-wezterm.on('format-tab-title', function(tab)
-  -- start indexing tabs from 1
-  local index = tab.tab_index + 1
-  local id = tab.tab_id
-  local pad = string.rep(' ', CONFIG.padding)
+local SOLID_LEFT_ARROW = utf8.char(0xe0ba)
+local SOLID_LEFT_MOST = utf8.char(0x2588)
+local SOLID_RIGHT_ARROW = utf8.char(0xe0bc)
 
-  if CONFIG.use_icons then
-    if tab_icons[id] == nil then
-      tab_icons[id] = icon_variants[math.random(#icon_variants)]
-    end
+local SUP_IDX = {
+  '¹',
+  '²',
+  '³',
+  '⁴',
+  '⁵',
+  '⁶',
+  '⁷',
+  '⁸',
+  '⁹',
+  '¹⁰',
+  '¹¹',
+  '¹²',
+  '¹³',
+  '¹⁴',
+  '¹⁵',
+  '¹⁶',
+  '¹⁷',
+  '¹⁸',
+  '¹⁹',
+  '²⁰',
+}
+local SUB_IDX = {
+  '₁',
+  '₂',
+  '₃',
+  '₄',
+  '₅',
+  '₆',
+  '₇',
+  '₈',
+  '₉',
+  '₁₀',
+  '₁₁',
+  '₁₂',
+  '₁₃',
+  '₁₄',
+  '₁₅',
+  '₁₆',
+  '₁₇',
+  '₁₈',
+  '₁₉',
+  '₂₀',
+}
 
-    local icon = tab_icons[id]
-    if tab.active_pane.is_zoomed then
-      icon = wezterm.format({
-        { Background = { Color = 'DarkOrange' } },
-        { Foreground = { Color = 'White' } },
-        { Text = string.format('%s ', wezterm.nerdfonts['md_magnify_plus']) },
-      })
-    end
+wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover)
+  local edge_background = '#121212'
+  local background = '#4e4e4e'
+  local foreground = '#1c1b19'
+  local dim_foreground = '#3A3A3A'
 
-    return string.format('%s%s  %s%s%s', numberStyle(index, 'superscript'), icon, tab_title(tab), pad, sep)
+  if tab.is_active then
+    background = '#d79921'
+    -- background = '#d65d0e'
+    foreground = '#1c1b19'
+  elseif hover then
+    background = '#ff7800'
+    -- background = '#d79921'
+    foreground = '#1c1b19'
   end
 
-  return string.format('%s %d %s', pad, index, pad)
+  if tab_icons[tab.tab_id] == nil then
+    tab_icons[tab.tab_id] = icon_variants[math.random(#icon_variants)]
+  end
+
+  local icon = tab_icons[tab.tab_id]
+  -- print(dump(icon))
+  if tab.active_pane.is_zoomed then
+    icon = wezterm.format({
+      { Text = wezterm.nerdfonts['md_magnify_plus'] },
+    })
+  end
+
+  local left_arrow = SOLID_LEFT_ARROW
+  if tab.tab_index == 0 then
+    left_arrow = SOLID_LEFT_MOST
+  end
+  local id = SUB_IDX[tab.tab_index + 1]
+
+  return {
+    { Attribute = { Intensity = 'Bold' } },
+    { Background = { Color = edge_background } },
+    { Foreground = { Color = background } },
+    { Text = left_arrow },
+    { Background = { Color = background } },
+    { Foreground = { Color = foreground } },
+    { Text = id },
+    { Text = icon },
+    { Text = ' ' },
+    { Background = { Color = background } },
+    { Foreground = { Color = foreground } },
+    { Text = tab_title(tab) .. ' ' },
+    { Background = { Color = edge_background } },
+    { Foreground = { Color = background } },
+    { Text = SOLID_RIGHT_ARROW },
+    { Attribute = { Intensity = 'Normal' } },
+  }
 end)
 
 return {
@@ -161,5 +210,5 @@ return {
   use_fancy_tab_bar = false,
   tab_bar_at_bottom = true,
   show_new_tab_button_in_tab_bar = false,
-  tab_max_width = 25,
+  tab_max_width = MAX_TAB_WIDTH,
 }

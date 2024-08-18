@@ -3,7 +3,7 @@
 -- - disable keys which would conflict with tmux
 
 local wezterm = require('wezterm')
-dofile('/devel/wezterm-config/keys-common.lua') -- brings "common_keys" into scope
+dofile('/home/gurkan/.config/wezterm/keys-common.lua') -- brings "common_keys" into scope
 tmux_keys = {
   { key = 'LeftArrow', mods = 'ALT', action = 'DisableDefaultAssignment' },
   { key = 'DownArrow', mods = 'ALT', action = 'DisableDefaultAssignment' },
