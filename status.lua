@@ -5,35 +5,25 @@ local utils = require('utils')
 
 local function render_battery(battery, fg_color)
   local icons = wezterm.nerdfonts
-  local percent = battery.state_of_charge
-  -- local formatted_percent = string.format('%.0f%%', percent * 100)
+  local prefix = 'md_battery'
+  local icon_name
 
-  local get_icon = function()
-    local prefix = 'md_battery'
-    if battery.state == 'Charging' then
-      return icons[prefix .. '_charging']
-    end
-
-    local icon_name
-
-    if percent > 0.9 then
-      icon_name = prefix
-    else
-      local suffix = math.max(1, math.ceil(percent * 10)) .. '0'
-      icon_name = prefix .. '_' .. suffix
-    end
-
-    local color = percent <= 0.1 and 'Red' or 'Green'
-    return wezterm.format({
-      { Foreground = { AnsiColor = color } },
-      { Text = icons[icon_name] },
-      { Foreground = { Color = fg_color } },
-      { Text = string.format(' %.0f%%', battery.state_of_charge * 100) },
-    })
+  if battery.state == 'Charging' then
+      icon_name = prefix .. '_charging'
+  elseif battery.state_of_charge > 0.9 then
+    icon_name = prefix
+  else
+    local suffix = math.max(1, math.ceil(percent * 10)) .. '0'
+    icon_name = prefix .. '_' .. suffix
   end
 
-  return get_icon()
-  -- return string.format('%s %s', get_icon(), formatted_percent)
+  local color = battery.state_of_charge<= 0.1 and 'Red' or 'Green'
+  return wezterm.format({
+    { Foreground = { AnsiColor = color } },
+    { Text = icons[icon_name] },
+    { Foreground = { Color = fg_color } },
+    { Text = string.format(' %.0f%%', battery.state_of_charge * 100) },
+  })
 end
 
 local function update_right_status(window, pane)
