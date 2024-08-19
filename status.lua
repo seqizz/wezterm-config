@@ -3,10 +3,10 @@ local M = {}
 local wezterm = require('wezterm')
 local utils = require('utils')
 
-local function render_battery(battery)
+local function render_battery(battery, fg_color)
   local icons = wezterm.nerdfonts
   local percent = battery.state_of_charge
-  local formatted_percent = string.format('%.0f%%', percent * 100)
+  -- local formatted_percent = string.format('%.0f%%', percent * 100)
 
   local get_icon = function()
     local prefix = 'md_battery'
@@ -27,10 +27,13 @@ local function render_battery(battery)
     return wezterm.format({
       { Foreground = { AnsiColor = color } },
       { Text = icons[icon_name] },
+      { Foreground = fg_color },
+      { Text = string.format(' %.0f%%', battery.state_of_charge * 100) },
     })
   end
 
-  return string.format('%s %s', get_icon(), formatted_percent)
+  return get_icon()
+  -- return string.format('%s %s', get_icon(), formatted_percent)
 end
 
 local function update_right_status(window, pane)
@@ -49,7 +52,7 @@ local function update_right_status(window, pane)
   local battery
 
   for _, b in ipairs(wezterm.battery_info()) do
-    battery = render_battery(b)
+    battery = render_battery(b, '#1c1b19')
   end
 
   local SOLID_LEFT_ARROW = utf8.char(0xe0ba)
@@ -59,7 +62,7 @@ local function update_right_status(window, pane)
   local foreground = '#1c1b19'
 
   window:set_right_status(wezterm.format({
-    { Attribute = { Intensity = 'Bold' } },
+    -- { Attribute = { Intensity = 'Bold' } },
     { Background = { Color = foreground } },
     { Foreground = { Color = background } },
     { Text = SOLID_LEFT_ARROW },
@@ -67,7 +70,7 @@ local function update_right_status(window, pane)
     { Foreground = { Color = foreground } },
     { Text = battery },
     { Background = { Color = background } },
-    { Foreground = { Color = foreground } },
+    { Foreground = { Color = '#1c1b18' } }, -- NVIDIA workaround.. Most valuable company in the whole world!
     { Text = SOLID_LEFT_ARROW },
     { Background = { Color = foreground } },
     { Text = ' ' },
