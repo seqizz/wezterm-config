@@ -27,7 +27,7 @@ local function render_battery(battery, fg_color)
     return wezterm.format({
       { Foreground = { AnsiColor = color } },
       { Text = icons[icon_name] },
-      { Foreground = fg_color },
+      { Foreground = { Color = fg_color } },
       { Text = string.format(' %.0f%%', battery.state_of_charge * 100) },
     })
   end
