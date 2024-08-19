@@ -152,7 +152,7 @@ local SUB_IDX = {
 }
 
 wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover)
-  local edge_background = '#121212'
+  local edge_background = '#1c1b19'
   local background = '#4e4e4e'
   local foreground = '#1c1b19'
   local dim_foreground = '#3A3A3A'

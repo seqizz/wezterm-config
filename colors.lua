@@ -10,12 +10,13 @@ return {
     ansi = { '#151515', '#ac4142', '#7e8e50', '#e5b567', '#6c99bb', '#9f4e85', '#7dd6cf', '#d0d0d0' },
     brights = { '#505050', '#ac4142', '#7e8e50', '#e5b567', '#6c99bb', '#9f4e85', '#7dd6cf', '#f5f5f5' },
     tab_bar = {
+      background = '#1c1b19',
       active_tab = {
         bg_color = '#313638',
         fg_color = '#FFFFFF',
       },
       inactive_tab = {
-        bg_color = '#1e1e1e',
+        bg_color = '#1c1b19',
         fg_color = '#71797E',
       },
     },
