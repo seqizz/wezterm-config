@@ -31,6 +31,23 @@ return {
       window:set_config_overrides({
         hide_tab_bar_if_only_one_tab = true,
         keys = concat_table(tmux_keys, common_keys),
+        background = {
+          { source = { Color = '#282828' }, opacity = 0.95, width = '100%', height = '100%' },
+          {
+            source = {
+              File = wezterm.home_dir .. '/.config/wezterm/assets/plane.png',
+            },
+            width = '3cell',
+            height = '15cell',
+            repeat_x = 'NoRepeat',
+            repeat_y = 'NoRepeat',
+            hsb = dimmer,
+            opacity = 0.4,
+            horizontal_align = 'Right',
+            vertical_align = 'Bottom',
+            horizontal_offset = -30,
+          },
+        },
       })
     end
   end),
