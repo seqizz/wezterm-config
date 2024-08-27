@@ -13,7 +13,7 @@ local function render_battery(battery, fg_color)
   elseif battery.state_of_charge > 0.9 then
     icon_name = prefix
   else
-    local suffix = math.max(1, math.ceil(percent * 10)) .. '0'
+    local suffix = math.max(1, math.ceil(battery.state_of_charge * 10)) .. '0'
     icon_name = prefix .. '_' .. suffix
   end
 
