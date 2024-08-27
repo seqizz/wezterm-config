@@ -6,4 +6,5 @@ return {
   check_for_updates = false,
   warn_about_missing_glyphs = false,
   exit_behavior = 'Close',
+  front_end = 'WebGpu',
 }
