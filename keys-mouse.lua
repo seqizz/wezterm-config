@@ -35,6 +35,7 @@ mux_keys = {
   { key = '8', mods = 'ALT', action = wezterm.action.ActivateTab(7) },
   { key = '9', mods = 'ALT', action = wezterm.action.ActivateTab(8) },
   { key = 'k', mods = 'ALT', action = wezterm.action.CloseCurrentTab({ confirm = true }) },
+  { key = 'z', mods = 'ALT', action = 'TogglePaneZoomState' },
   {
     key = 'f',
     mods = 'ALT',

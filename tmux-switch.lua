@@ -23,6 +23,7 @@ tmux_keys = {
   { key = '8', mods = 'ALT', action = 'DisableDefaultAssignment' },
   { key = '9', mods = 'ALT', action = 'DisableDefaultAssignment' },
   { key = 'k', mods = 'ALT', action = 'DisableDefaultAssignment' },
+  { key = 'z', mods = 'ALT', action = 'DisableDefaultAssignment' },
 }
 return {
   wezterm.on('user-var-changed', function(window, pane, name, value)

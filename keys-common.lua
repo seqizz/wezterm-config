@@ -20,7 +20,6 @@ common_keys = {
 
   { key = 'Return', mods = 'ALT', action = 'DisableDefaultAssignment' },
   { key = 'n', mods = 'SUPER', action = 'DisableDefaultAssignment' },
-  { key = 'z', mods = 'ALT', action = 'TogglePaneZoomState' },
   { key = 'x', mods = 'ALT', action = 'QuickSelect' },
   { key = '+', mods = 'CTRL', action = 'IncreaseFontSize' },
   { key = '4', mods = 'CTRL', action = 'IncreaseFontSize' },
