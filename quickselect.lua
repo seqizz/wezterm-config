@@ -3,6 +3,7 @@ return {
   quick_select_patterns = {
     'https?://[^"\' ]+', -- url
     'sha256-\\S{44}', -- sha256 another
+    'AQ\\S{38}', -- CephX secret
     '[0-9a-f]{7,40}', -- sha1
     'sha256:[A-Za-z0-9]{52}', -- sha256
     '[a-z0-9-]+.[a-z0-9]+.[a-z0-9]+.[a-z0-9]+ ', -- inno FQDN
