@@ -38,7 +38,7 @@ return {
             source = {
               File = wezterm.home_dir .. '/.config/wezterm/assets/my-man.png',
             },
-            width = '12cell',
+            width = '14cell',
             height = '6cell',
             repeat_x = 'NoRepeat',
             repeat_y = 'NoRepeat',
