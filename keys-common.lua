@@ -25,6 +25,11 @@ common_keys = {
   { key = '4', mods = 'CTRL', action = 'IncreaseFontSize' },
   { key = '-', mods = 'CTRL', action = 'DecreaseFontSize' },
   { key = '0', mods = 'CTRL', action = 'ResetFontSize' },
+  {
+    key = 'Backspace',
+    mods = 'CTRL',
+    action = wezterm.action.SendKey({ key = 'h', mods = 'CTRL' }),
+  },
   { key = 'Delete', mods = 'SHIFT', action = wezterm.action({ PasteFrom = 'PrimarySelection' }) },
   { key = 'V', mods = 'CTRL', action = wezterm.action({ PasteFrom = 'Clipboard' }) },
   -- Alt-c to "click" links without mouse
