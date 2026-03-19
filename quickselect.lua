@@ -13,7 +13,8 @@ return {
     '\'(\\S[^\']*\\S)\'', -- single quoted text
     '"(\\S[^"]*\\S)"', -- double quoted text
     '~?/?[a-zA-Z0-9_/.-]+', -- path
-    '~> (.*)', -- stuff after ~> because that is the prompt
-    '%s(.*)%s', -- anything else covered with whitespace
+    '(?<=\\)\\s)[^\\s]+', -- git branch name on my prompt
+    '(?<=~>\\s).*?(?=\\s*(?:\\(|\\[))', -- stuff after ~> because that is the prompt
+    -- '%s(.*)%s', -- anything else covered with whitespace
   },
 }

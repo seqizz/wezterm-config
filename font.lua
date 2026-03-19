@@ -1,6 +1,6 @@
 local wezterm = require('wezterm')
 return {
-  font_size = 14,
+  font_size = 13,
 
   -- @Reference: single font
   -- font = wezterm.font "FiraCode Nerd Font",
