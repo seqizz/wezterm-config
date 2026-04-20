@@ -83,7 +83,10 @@ return {
       {
         key = 'Escape',
         mods = 'NONE',
-        action = wezterm.action.CopyMode('Close'),
+        action = wezterm.action.Multiple({
+          wezterm.action.CopyMode('Close'),
+          wezterm.action.ScrollToBottom,
+        }),
       },
       {
         key = '?',
@@ -93,17 +96,26 @@ return {
       {
         key = 'c',
         mods = 'CTRL',
-        action = wezterm.action.CopyMode('Close'),
+        action = wezterm.action.Multiple({
+          wezterm.action.CopyMode('Close'),
+          wezterm.action.ScrollToBottom,
+        }),
       },
       {
         key = 'Enter',
         mods = 'NONE',
-        action = wezterm.action.CopyMode('Close'),
+        action = wezterm.action.Multiple({
+          wezterm.action.CopyMode('Close'),
+          wezterm.action.ScrollToBottom,
+        }),
       },
       {
         key = 'Escape',
         mods = 'ALT',
-        action = wezterm.action.CopyMode('Close'),
+        action = wezterm.action.Multiple({
+          wezterm.action.CopyMode('Close'),
+          wezterm.action.ScrollToBottom,
+        }),
       },
       { key = 'LeftArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveLeft' }) },
       { key = 'RightArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveRight' }) },
@@ -115,6 +127,7 @@ return {
         action = wezterm.action.Multiple({
           wezterm.action({ CopyTo = 'ClipboardAndPrimarySelection' }),
           wezterm.action({ CopyMode = 'Close' }),
+          wezterm.action.ScrollToBottom,
         }),
       },
       { key = 'PageDown', mods = 'NONE', action = wezterm.action.CopyMode('PageDown') },
@@ -126,6 +139,7 @@ return {
       { key = 'Escape', mods = 'NONE', action = wezterm.action.Multiple({
         wezterm.action({ CopyMode = 'ClearPattern' }),
         wezterm.action({ CopyMode = 'Close' }),
+        wezterm.action.ScrollToBottom,
       })},
     },
   },
