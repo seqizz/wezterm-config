@@ -26,25 +26,41 @@ local function render_battery(battery, fg_color)
   })
 end
 
-local function update_left_status(window)
+local function update_left_status(window, pane)
   local key_table = window:active_key_table()
+  local indicators = {}
+
   if key_table == 'copy_mode' then
-    window:set_left_status(wezterm.format({
+    table.insert(indicators, wezterm.format({
       { Attribute = { Intensity = 'Bold' } },
       { Background = { AnsiColor = 'Red' } },
       { Foreground = { AnsiColor = 'White' } },
-      { Text = ' COPY ' },
+      { Text = ' ' .. wezterm.nerdfonts['md_content_copy'] .. ' COPY ' },
     }))
   elseif key_table == 'search_mode' then
-    window:set_left_status(wezterm.format({
+    table.insert(indicators, wezterm.format({
       { Attribute = { Intensity = 'Bold' } },
       { Background = { AnsiColor = 'Blue' } },
       { Foreground = { AnsiColor = 'White' } },
       { Text = ' SEARCH ' },
     }))
-  else
-    window:set_left_status('')
   end
+
+  -- zoom state lives on PaneInformation, not Pane userdata
+  local tab = window:active_tab()
+  for _, p in ipairs(tab:panes_with_info()) do
+    if p.is_zoomed then
+      table.insert(indicators, wezterm.format({
+        { Attribute = { Intensity = 'Bold' } },
+        { Background = { AnsiColor = 'Blue' } },
+        { Foreground = { AnsiColor = 'White' } },
+        { Text = ' ' .. wezterm.nerdfonts['md_magnify_plus'] .. ' ZOOM ' },
+      }))
+      break
+    end
+  end
+
+  window:set_left_status(table.concat(indicators, ''))
 end
 
 local function update_right_status(window, pane)
@@ -107,7 +123,7 @@ end
 
 function M.enable()
   wezterm.on('update-right-status', function(window, pane)
-    update_left_status(window)
+    update_left_status(window, pane)
     update_right_status(window, pane)
   end)
 end

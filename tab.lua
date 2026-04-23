@@ -172,12 +172,6 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover)
   end
 
   local icon = tab_icons[tab.tab_id]
-  -- print(dump(icon))
-  if tab.active_pane.is_zoomed then
-    icon = wezterm.format({
-      { Text = wezterm.nerdfonts['md_magnify_plus'] },
-    })
-  end
 
   local left_arrow = SOLID_LEFT_ARROW
   if tab.tab_index == 0 then
