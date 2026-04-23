@@ -7,4 +7,5 @@ return {
   warn_about_missing_glyphs = false,
   exit_behavior = 'Close',
   front_end = 'OpenGL',
+  audible_bell = "Disabled",
 }
