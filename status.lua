@@ -73,7 +73,7 @@ local function update_right_status(window, pane)
   })
 
   local hostname = wezterm.format({
-    { Text = string.format(' %s ', pane:get_domain_name()) },
+    { Text = string.format(' %s ', wezterm.hostname()) },
   })
 
   local battery

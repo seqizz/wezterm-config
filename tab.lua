@@ -23,6 +23,7 @@ local function dump(o)
    end
 end
 
+math.randomseed(os.time())
 local tab_icons = {}
 
 local function ansi(c) return { AnsiColor = c } end
