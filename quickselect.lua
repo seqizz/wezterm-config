@@ -11,7 +11,9 @@ return {
     '[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+.[a-zA-Z0-9.-]+', -- simple e-mail
     '\'(\\S[^\']*\\S)\'', -- single quoted text
     '"(\\S[^"]*\\S)"', -- double quoted text
-    '~?/[a-zA-Z0-9_/.-]+|~[a-zA-Z0-9_/.-]*', -- path (require / or ~)
+    '~?/[a-zA-Z0-9_/.-]+|~[a-zA-Z0-9_/.-]*', -- absolute path or ~ path
+    '\\.{1,2}/[a-zA-Z0-9_/.-]+', -- relative path ./ or ../
+    '[a-zA-Z0-9_-]+(?:(?:/[a-zA-Z0-9_-]+)+(?:\\.[a-zA-Z0-9_-]+)?|\\.[a-zA-Z0-9_-]+)', -- bare relative: foo/bar, foo/bar.txt, script.sh (max 1 dot for ext)
     '(?<=\\)\\s)[^\\s]+', -- git branch name on my prompt
     '(?<=~>\\s).*?(?=\\s*(?:\\(|\\[))', -- stuff after ~> because that is the prompt
     -- '%s(.*)%s', -- anything else covered with whitespace
