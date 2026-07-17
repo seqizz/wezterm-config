@@ -18,12 +18,14 @@ local function render_battery(battery, fg_color)
   end
 
   local color = battery.state_of_charge<= 0.1 and 'Red' or 'Green'
-  return wezterm.format({
+  local plain = icons[icon_name] .. string.format(' %.0f%%', battery.state_of_charge * 100)
+  local formatted = wezterm.format({
     { Foreground = { AnsiColor = color } },
     { Text = icons[icon_name] },
     { Foreground = { Color = fg_color } },
     { Text = string.format(' %.0f%%', battery.state_of_charge * 100) },
   })
+  return formatted, plain
 end
 
 local function update_left_status(window, pane)
@@ -61,6 +63,23 @@ local function update_left_status(window, pane)
   end
 
   window:set_left_status(table.concat(indicators, ''))
+
+  -- Track visible width of left status for the grow-to-fill tab sizing (tab.lua).
+  -- Each indicator block has a known plain-text form; recompute rather than
+  -- storing escapes since wezterm.column_width would count the escape bytes.
+  local lw = 0
+  if key_table == 'copy_mode' then
+    lw = lw + wezterm.column_width(' ' .. wezterm.nerdfonts['md_content_copy'] .. ' COPY ')
+  elseif key_table == 'search_mode' then
+    lw = lw + wezterm.column_width(' SEARCH ')
+  end
+  for _, p in ipairs(tab:panes_with_info()) do
+    if p.is_zoomed then
+      lw = lw + wezterm.column_width(' ' .. wezterm.nerdfonts['md_magnify_plus'] .. ' ZOOM ')
+      break
+    end
+  end
+  wezterm.GLOBAL.lstatus_w = lw
 end
 
 local function update_right_status(window, pane)
@@ -77,9 +96,10 @@ local function update_right_status(window, pane)
   })
 
   local battery
+  local battery_plain = ''
 
   for _, b in ipairs(wezterm.battery_info()) do
-    battery = render_battery(b, '#1c1b19')
+    battery, battery_plain = render_battery(b, '#1c1b19')
   end
 
   local SOLID_LEFT_ARROW = utf8.char(0xe0ba)
@@ -119,6 +139,22 @@ local function update_right_status(window, pane)
     { Foreground = { Color = foreground } },
     { Text = hostname },
   }))
+
+  -- Publish widths + total terminal columns so tab.lua can size tabs to fill.
+  -- Right status visible parts: 5 powerline arrows + 2 spaces + battery + date + hostname.
+  local rw = wezterm.column_width(battery_plain)
+           + wezterm.column_width(date)
+           + wezterm.column_width(string.format(' %s ', wezterm.hostname()))
+           + 5  -- SOLID_LEFT_ARROW glyphs (1 cell each)
+           + 2  -- literal spaces between segments
+  wezterm.GLOBAL.rstatus_w = rw
+
+  -- MuxTab:get_size() gives the whole tab grid (full width, ignores splits),
+  -- which equals the tab bar width in columns.
+  local ok, size = pcall(function() return window:active_tab():get_size() end)
+  if ok and size then
+    wezterm.GLOBAL.tabbar_cols = size.cols
+  end
 end
 
 function M.enable()

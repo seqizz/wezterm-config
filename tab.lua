@@ -1,8 +1,10 @@
 local wezterm = require('wezterm')
 local utils = require('utils')
 
-local MAX_TAB_WIDTH = 30
-local MAX_TEXT_LENGTH = math.max(18, MAX_TAB_WIDTH - 7)
+local MAX_TAB_WIDTH = 9999   -- no hard cap, let wezterm distribute available space across tabs
+local MAX_TEXT_LENGTH = 60   -- upstream substring guard, real sizing done in format-tab-title
+local MAX_TITLE_CAP = 24     -- most title cells a single tab will ever claim
+local MIN_TITLE = 2          -- floor for the title text budget when tabs must shrink to fit
 
 local CONFIG = {
   padding = 1,
@@ -152,7 +154,17 @@ local SUB_IDX = {
   '₂₀',
 }
 
-wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover)
+-- Cells taken by everything except the title text: left arrow, index, icon,
+-- the space after the icon, the trailing space, and the right arrow.
+local function tab_fixed_width(t)
+  local id_w = wezterm.column_width(SUB_IDX[t.tab_index + 1] or '?')
+  local icon = tab_icons[t.tab_id]
+  local icon_w = icon and wezterm.column_width(icon) or 1
+  -- 1 left arrow + id + icon + 2 spaces + 1 right arrow
+  return 1 + id_w + icon_w + 2 + 1
+end
+
+wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_width)
   local edge_background = '#1c1b19'
   local background = '#4e4e4e'
   local foreground = '#1c1b19'
@@ -180,6 +192,38 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover)
   end
   local id = SUB_IDX[tab.tab_index + 1]
 
+  -- Grow-to-need sizing. Give every tab the width its own title wants (capped at
+  -- MAX_TITLE_CAP) and only shrink when the sum of all titles overflows the bar.
+  -- That way a new short tab uses the free space on the right instead of squeezing
+  -- the existing long tabs. Widths come from status.lua via wezterm.GLOBAL (1 frame
+  -- stale, imperceptible).
+  local cols = wezterm.GLOBAL.tabbar_cols or 80
+  local reserved = (wezterm.GLOBAL.rstatus_w or 0) + (wezterm.GLOBAL.lstatus_w or 0) + 1
+  local avail = math.max(0, cols - reserved)
+
+  local sum_fixed = 0     -- decoration cells across all tabs
+  local sum_desired = 0   -- title cells all tabs would like
+  local this_desired = 0  -- title cells this tab would like
+  for _, t in ipairs(tabs) do
+    local desired = math.min(wezterm.column_width(tab_title(t)), MAX_TITLE_CAP)
+    sum_fixed = sum_fixed + tab_fixed_width(t)
+    sum_desired = sum_desired + desired
+    if t.tab_id == tab.tab_id then this_desired = desired end
+  end
+
+  local avail_titles = math.max(0, avail - sum_fixed)
+  local title_budget
+  if sum_desired <= avail_titles or sum_desired == 0 then
+    -- Everything fits: each tab keeps its natural width, no squeezing.
+    title_budget = this_desired
+  else
+    -- Overflow: shrink titles proportionally to how much each wanted.
+    local factor = avail_titles / sum_desired
+    title_budget = math.max(MIN_TITLE, math.floor(this_desired * factor))
+  end
+
+  local title = wezterm.truncate_right(tab_title(tab), title_budget)
+
   return {
     { Attribute = { Intensity = 'Bold' } },
     { Background = { Color = edge_background } },
@@ -192,7 +236,8 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover)
     { Text = ' ' },
     { Background = { Color = background } },
     { Foreground = { Color = foreground } },
-    { Text = tab_title(tab) .. ' ' },
+    { Text = title },
+    { Text = ' ' },
     { Background = { Color = edge_background } },
     { Foreground = { Color = background } },
     { Text = SOLID_RIGHT_ARROW },
