@@ -40,10 +40,15 @@ common_keys = {
       label = 'open url',
       patterns = {
         -- A bit more proper regex for URLs, at least to clickable ones
-        'https?://[A-Za-z0-9$_+:/?#@&,;%=.-]+',
+        -- last char must be alnum or '/' so trailing sentence punctuation
+        -- (comma, dot, etc.) is not part of the highlighted selection
+        'https?://[A-Za-z0-9$_+:/?#@&,;%=.-]*[A-Za-z0-9/]',
       },
       action = wezterm.action_callback(function(window, pane)
         local url = window:get_selection_text_for_pane(pane)
+        -- Comma is valid mid-URL (query params), so keep it in the pattern
+        -- but strip trailing punctuation that is usually sentence-suffix.
+        url = url:gsub('[.,;:!?]+$', '')
         wezterm.log_info('opening: ' .. url)
         wezterm.open_with(url)
       end),
