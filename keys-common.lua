@@ -1,4 +1,7 @@
 local wezterm = require('wezterm')
+-- requiring the module registers its 'user-var-changed' capture handler and
+-- exposes the picker action bound below (Ctrl-Shift-S)
+local snippets = require('snippets')
 function concat_table(t1, t2)
   for i = 1, #t2 do
     t1[#t1 + 1] = t2[i]
@@ -32,6 +35,12 @@ common_keys = {
   },
   { key = 'Delete', mods = 'SHIFT', action = wezterm.action({ PasteFrom = 'PrimarySelection' }) },
   { key = 'V', mods = 'CTRL', action = wezterm.action({ PasteFrom = 'Clipboard' }) },
+  -- Physical launch key (X keycode 195, keysym XF86Launch8) carries no terminal
+  -- escape of its own, so WezTerm handles it directly rather than the shell:
+  --   plain -> inject the Shift-F5 sequence the zsh bindkey captures on
+  --   Ctrl  -> open the snippet picker
+  { key = 'raw:195', action = wezterm.action.SendString('\x1b[15;2~') },
+  { key = 'raw:195', mods = 'CTRL', action = snippets.picker },
   -- Alt-c to "click" links without mouse
   {
     key = 'c',
