@@ -43,7 +43,7 @@ return {
             repeat_x = 'NoRepeat',
             repeat_y = 'NoRepeat',
             hsb = dimmer,
-            opacity = 0.02,
+            opacity = 0.1,
             horizontal_align = 'Right',
             vertical_align = 'Bottom',
             vertical_offset = -20,
