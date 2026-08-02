@@ -2,22 +2,21 @@
 --
 -- Local/remote zsh sessions emit a selected command via OSC 1337 SetUserVar
 -- (WEZ_SNIPPET_ADD, base64 JSON). This module receives the decoded JSON in the
--- 'user-var-changed' event, stores it in a local JSON file, and offers a picker
--- (M.picker, bound in keys-common.lua) that pastes a chosen snippet into the
--- active pane WITHOUT a trailing newline, so it is inserted but not executed.
+-- 'user-var-changed' event, stores it in a local SQLite database (WAL mode),
+-- and offers a picker (M.picker, bound in keys-common.lua) that pastes a chosen
+-- snippet into the active pane WITHOUT a trailing newline.
 --
--- No external helper binary and no run_child_process on the hot path: WezTerm's
--- own wezterm.json_parse/json_encode plus stock Lua io/os are enough. Storage is
--- a JSON file rather than SQLite because WezTerm's Lua has no SQLite binding;
--- fine for the expected volume (hundreds to low thousands of snippets).
+-- WezTerm's embedded Lua has no SQLite C binding (package.cpath is a dead end
+-- on NixOS), so all operations shell out to the sqlite3 CLI via
+-- wezterm.run_child_process. The overhead (~5-10 ms per call) is negligible for
+-- user-triggered actions (explicit capture, picker open).
 
 local wezterm = require('wezterm')
 
 local M = {}
 
-local STATE_DIR = wezterm.home_dir .. '/.local/state/wezterm'
-local STORE = STATE_DIR .. '/snippets.json'
-local TMP = STORE .. '.tmp'
+local DB_DIR = wezterm.home_dir .. '/syncfolder/dotfiles/snippetstore'
+local DB = DB_DIR .. '/snippets.db'
 
 local MAX_PAYLOAD = 64 * 1024 -- reject decoded JSON larger than this
 local MAX_COMMAND = 16 * 1024 -- reject command text larger than this
@@ -37,71 +36,105 @@ local SECRET_PATTERNS = {
   'BEGIN PRIVATE KEY',
 }
 
--- Pure Lua has no mkdir. Create the state dir lazily on first save; done here
--- and not at load time because run_child_process yields a coroutine, which is
--- illegal during config eval (only valid inside event/callback contexts).
-local dir_ready = false
-local function ensure_dir()
-  if dir_ready then
-    return
-  end
-  wezterm.run_child_process({ 'mkdir', '-p', STATE_DIR })
-  dir_ready = true
-end
-
-local function now()
-  return os.time()
-end
-
 local function trim(s)
   return (s:gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
-local function load()
-  local f = io.open(STORE, 'r')
-  if not f then
-    return {}
-  end
-  local data = f:read('*a')
-  f:close()
-  if not data or data == '' then
-    return {}
-  end
-  local ok, parsed = pcall(wezterm.json_parse, data)
-  if not ok or type(parsed) ~= 'table' then
-    -- corrupt/partial file: start fresh rather than crash the handler
-    return {}
-  end
-  return parsed
-end
+-- SQLite does not exist during config eval; run_child_process yields a
+-- coroutine, which is illegal outside event/callback contexts. Lazily create
+-- the database on first use.
+local db_ready = false
 
-local function save(list)
-  ensure_dir()
-  local f = io.open(TMP, 'w')
-  if not f then
-    wezterm.log_error('wez-snippets: cannot write ' .. TMP)
+local function ensure_db()
+  if db_ready then
+    return true
+  end
+  local ok, _, err = wezterm.run_child_process({ 'mkdir', '-p', DB_DIR })
+  if not ok then
+    wezterm.log_error('wez-snippets: mkdir failed: ' .. tostring(err))
     return false
   end
-  f:write(wezterm.json_encode(list))
-  f:close()
-  -- rename is atomic on the same filesystem; guards against a torn file if two
-  -- WezTerm processes write concurrently (last writer wins, no partial reads).
-  local ok, err = os.rename(TMP, STORE)
+  -- Schema is split into separate calls because PRAGMA output mixed with DDL
+  -- in a single sqlite3 CLI invocation can cause unexpected stdout.
+  ok, _, err = wezterm.run_child_process({ 'sqlite3', DB, 'PRAGMA journal_mode=WAL;' })
   if not ok then
-    wezterm.log_error('wez-snippets: rename failed: ' .. tostring(err))
+    wezterm.log_error('wez-snippets: WAL pragma failed: ' .. tostring(err))
+    return false
+  end
+  ok, _, err = wezterm.run_child_process({ 'sqlite3', DB, [[
+    CREATE TABLE IF NOT EXISTS snippets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      text TEXT NOT NULL,
+      comment TEXT,
+      source TEXT,
+      host TEXT,
+      user TEXT,
+      cwd TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      use_count INTEGER NOT NULL DEFAULT 0,
+      last_used_at INTEGER
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_text ON snippets(text);
+  ]] })
+  if not ok then
+    wezterm.log_error('wez-snippets: schema creation failed: ' .. tostring(err))
+    return false
+  end
+  -- Migrate databases created before the comment feature: add the column if
+  -- absent. ADD COLUMN on an existing column errors, so gate on pragma lookup.
+  local ok2, out = wezterm.run_child_process({
+    'sqlite3', DB, "SELECT COUNT(*) FROM pragma_table_info('snippets') WHERE name = 'comment';",
+  })
+  if ok2 and out and trim(out) == '0' then
+    wezterm.run_child_process({ 'sqlite3', DB, 'ALTER TABLE snippets ADD COLUMN comment TEXT;' })
+  end
+  db_ready = true
+  return true
+end
+
+-- run_child_process returns (success_bool, stdout, stderr).
+-- Execute a SQL statement (INSERT/UPDATE/DELETE/DDL). Returns true on success,
+-- false on failure. Errors are logged.
+local function sql_exec(sql)
+  local ok, stdout, stderr = wezterm.run_child_process({ 'sqlite3', DB, sql })
+  if not ok then
+    wezterm.log_error('wez-snippets: sql exec failed: ' .. tostring(stderr))
     return false
   end
   return true
 end
 
-local function next_id(list)
-  local m = 0
-  for _, s in ipairs(list) do
-    if s.id and s.id > m then
-      m = s.id
-    end
+-- Execute a SELECT query with -json output. Returns parsed Lua table on
+-- success, empty table on failure.
+local function sql_query(sql)
+  local ok, stdout, stderr =
+    wezterm.run_child_process({ 'sqlite3', DB, '-json', sql })
+  if not ok then
+    wezterm.log_error('wez-snippets: sql query failed: ' .. tostring(stderr))
+    return {}
   end
-  return m + 1
+  if not stdout or stdout == '' then
+    return {}
+  end
+  local ok2, parsed = pcall(wezterm.json_parse, stdout)
+  if not ok2 or type(parsed) ~= 'table' then
+    wezterm.log_error('wez-snippets: bad json from sqlite3')
+    return {}
+  end
+  return parsed
+end
+
+-- Escape a string for safe use as a SQLite string literal.
+local function sql_str(s)
+  if s == nil then
+    return 'NULL'
+  end
+  return "'" .. tostring(s):gsub("'", "''") .. "'"
+end
+
+local function now()
+  return os.time()
 end
 
 local function looks_like_secret(text)
@@ -113,48 +146,135 @@ local function looks_like_secret(text)
   return false
 end
 
+-- Id of the last snippet inserted/updated this session. Used to attach a
+-- comment-only capture ('# ...') to the snippet just saved. Reset on config
+-- reload, in which case attach_comment falls back to the newest DB row.
+local last_snippet_id = nil
+
+-- Split a captured line into (command, comment). A trailing note must be set
+-- off by whitespace before the '#' (' # ...'), so a '#' glued to command text
+-- (URL fragment, printf '%H#') is NOT mistaken for a comment. A line that
+-- starts with '#' is a comment-only capture. Returns:
+--   command, comment  -> normal capture with a note
+--   command, nil      -> plain command, no note
+--   nil, comment      -> comment only (no command before the '#')
+local function split_comment(raw)
+  local s = trim(raw)
+  -- Comment-only capture: the whole line is a '# ...' note.
+  if s:sub(1, 1) == '#' then
+    local comment = trim(s:sub(2))
+    return nil, (#comment > 0 and comment or nil)
+  end
+  -- Command + note: split on the LAST ' #' (whitespace immediately before '#').
+  local ws, hash
+  local i = 1
+  while true do
+    local a, b = s:find('%s#', i)
+    if not a then
+      break
+    end
+    ws, hash = a, b
+    i = b + 1
+  end
+  if not hash then
+    return s, nil
+  end
+  local cmd = trim(s:sub(1, ws - 1))
+  local comment = trim(s:sub(hash + 1))
+  if #comment == 0 then
+    comment = nil
+  end
+  if #cmd == 0 then
+    return nil, comment
+  end
+  return cmd, comment
+end
+
+-- Attach a comment-only capture to the last saved snippet (or the newest row
+-- after a reload). Returns record, nil or nil, reason.
+local function attach_comment(comment)
+  local id = last_snippet_id
+  if not id then
+    local rows = sql_query('SELECT id FROM snippets ORDER BY created_at DESC, id DESC LIMIT 1')
+    if #rows == 0 then
+      return nil, 'no snippet to comment'
+    end
+    id = rows[1].id
+  end
+  if not sql_exec(string.format(
+    'UPDATE snippets SET comment = %s, updated_at = %d WHERE id = %s',
+    sql_str(comment), now(), sql_str(id)
+  )) then
+    return nil, 'db error'
+  end
+  local rows = sql_query(
+    string.format('SELECT * FROM snippets WHERE id = %s LIMIT 1', sql_str(id))
+  )
+  if #rows > 0 then
+    last_snippet_id = rows[1].id
+    return rows[1], nil
+  end
+  return { text = comment, use_count = 0 }, nil
+end
+
 -- Store a validated payload. Returns record, nil on success or nil, reason on
--- rejection. Dedups by trimmed text: an existing identical snippet gets its
--- use_count bumped instead of a duplicate row.
+-- rejection. Deduplication is handled by the UNIQUE index on text: an identical
+-- snippet gets its use_count bumped via ON CONFLICT instead of a duplicate row.
 local function add(payload)
-  local text = payload.command
-  if type(text) ~= 'string' or #text == 0 then
+  local raw = payload.command
+  if type(raw) ~= 'string' or #raw == 0 then
     return nil, 'empty command'
   end
-  if #text > MAX_COMMAND then
+  if #raw > MAX_COMMAND then
     return nil, 'command too large'
   end
+
+  local text, comment = split_comment(raw)
+
+  -- No command part: a lone '# ...' capture updates the last snippet's comment.
+  if text == nil then
+    if not comment then
+      return nil, 'empty comment'
+    end
+    return attach_comment(comment)
+  end
+
   if looks_like_secret(text) then
     return nil, 'looks like secret'
   end
 
-  local list = load()
-  local norm = trim(text)
   local t = now()
-
-  for _, s in ipairs(list) do
-    if trim(s.text or '') == norm then
-      s.use_count = (s.use_count or 0) + 1
-      s.updated_at = t
-      save(list)
-      return s, nil
-    end
+  local sql = string.format(
+    [[INSERT INTO snippets (text, comment, source, host, user, cwd, created_at, updated_at)
+      VALUES (%s, %s, %s, %s, %s, %s, %d, %d)
+      ON CONFLICT(text) DO UPDATE SET
+        use_count = use_count + 1,
+        updated_at = excluded.updated_at,
+        comment = COALESCE(excluded.comment, snippets.comment)]],
+    sql_str(text),
+    sql_str(comment),
+    sql_str(payload.source),
+    sql_str(payload.host),
+    sql_str(payload.user),
+    sql_str(payload.cwd),
+    t,
+    t
+  )
+  if not sql_exec(sql) then
+    return nil, 'db error'
   end
 
-  local rec = {
-    id = next_id(list),
-    text = text,
-    source = payload.source,
-    host = payload.host,
-    user = payload.user,
-    cwd = payload.cwd,
-    created_at = t,
-    updated_at = t,
-    use_count = 0,
-  }
-  table.insert(list, rec)
-  save(list)
-  return rec, nil
+  -- Fetch the row back (either newly inserted or the conflicted one) for the
+  -- toast notification and to remember it as the comment-attach target.
+  local rows = sql_query(
+    string.format('SELECT * FROM snippets WHERE text = %s LIMIT 1', sql_str(text))
+  )
+  if #rows > 0 then
+    last_snippet_id = rows[1].id
+    return rows[1], nil
+  end
+  -- Should not happen, but return a minimal record rather than nil.
+  return { text = text, use_count = 0 }, nil
 end
 
 wezterm.on('user-var-changed', function(window, pane, name, value)
@@ -174,6 +294,10 @@ wezterm.on('user-var-changed', function(window, pane, name, value)
     return
   end
 
+  if not ensure_db() then
+    window:toast_notification('wez-snippets', 'rejected: db init failed', nil, 4000)
+    return
+  end
   local rec, err = add(payload)
   if rec then
     local short = rec.text:gsub('%s+', ' ')
@@ -189,28 +313,28 @@ end)
 -- Picker action, bound to a key in keys-common.lua. Lists snippets
 -- most-recently-used first and pastes the selection into the active pane.
 M.picker = wezterm.action_callback(function(window, pane)
-  local list = load()
-  if #list == 0 then
+  if not ensure_db() then
+    window:toast_notification('wez-snippets', 'db init failed', nil, 3000)
+    return
+  end
+  local rows = sql_query(
+    'SELECT * FROM snippets ORDER BY last_used_at DESC, use_count DESC'
+  )
+  if #rows == 0 then
     window:toast_notification('wez-snippets', 'no snippets saved', nil, 3000)
     return
   end
 
-  table.sort(list, function(a, b)
-    local la, lb = a.last_used_at or 0, b.last_used_at or 0
-    if la ~= lb then
-      return la > lb
-    end
-    return (a.use_count or 0) > (b.use_count or 0)
-  end)
-
   local choices = {}
-  for _, s in ipairs(list) do
+  for _, s in ipairs(rows) do
     local preview = (s.text or ''):gsub('%s+', ' ')
     if #preview > 80 then
       preview = preview:sub(1, 77) .. '...'
     end
     local origin = s.host and ('[' .. s.host .. '] ') or ''
-    table.insert(choices, { id = tostring(s.id), label = origin .. preview })
+    -- Comment is appended to the label so InputSelector's fuzzy match hits it.
+    local note = (s.comment and #s.comment > 0) and ('  # ' .. s.comment) or ''
+    table.insert(choices, { id = tostring(s.id), label = origin .. preview .. note })
   end
 
   window:perform_action(
@@ -222,17 +346,20 @@ M.picker = wezterm.action_callback(function(window, pane)
         if not id then
           return
         end
-        -- reload fresh state so a concurrent capture is not clobbered
-        local cur = load()
-        for _, s in ipairs(cur) do
-          if tostring(s.id) == id then
-            s.use_count = (s.use_count or 0) + 1
-            s.last_used_at = now()
-            save(cur)
-            -- strip trailing newline: insert without executing
-            inner_pane:send_text((s.text or ''):gsub('\n+$', ''))
-            return
-          end
+        local t = now()
+        sql_exec(string.format(
+          'UPDATE snippets SET use_count = use_count + 1, last_used_at = %d WHERE id = %s',
+          t,
+          sql_str(id)
+        ))
+        -- Fetch the text to paste. The id came from our own query so integer
+        -- coercion is safe; sql_str wraps it in quotes for SQLite.
+        local rows = sql_query(
+          string.format('SELECT text FROM snippets WHERE id = %s', sql_str(id))
+        )
+        if #rows > 0 then
+          -- strip trailing newline: insert without executing
+          inner_pane:send_text((rows[1].text or ''):gsub('\n+$', ''))
         end
       end),
     }),

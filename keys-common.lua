@@ -41,6 +41,8 @@ common_keys = {
   --   Ctrl  -> open the snippet picker
   { key = 'raw:195', action = wezterm.action.SendString('\x1b[15;2~') },
   { key = 'raw:195', mods = 'CTRL', action = snippets.picker },
+  { key = 'F12', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
+  { key = 'F12', mods = 'CTRL|SHIFT', action = snippets.picker },
   -- Alt-c to "click" links without mouse
   {
     key = 'c',
