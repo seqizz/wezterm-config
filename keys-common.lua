@@ -37,12 +37,15 @@ common_keys = {
   { key = 'V', mods = 'CTRL', action = wezterm.action({ PasteFrom = 'Clipboard' }) },
   -- Physical launch key (X keycode 195, keysym XF86Launch8) carries no terminal
   -- escape of its own, so WezTerm handles it directly rather than the shell:
-  --   plain -> inject the Shift-F5 sequence the zsh bindkey captures on
-  --   Ctrl  -> open the snippet picker
+  --   plain      -> inject the Shift-F5 sequence the zsh bindkey captures on
+  --   Ctrl       -> open the snippet picker
+  --   Ctrl+Shift -> promote a captured snippet into the vimwiki cheatsheet
   { key = 'raw:195', action = wezterm.action.SendString('\x1b[15;2~') },
   { key = 'raw:195', mods = 'CTRL', action = snippets.picker },
+  { key = 'raw:195', mods = 'CTRL|SHIFT', action = snippets.promote },
   { key = 'F12', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'F12', mods = 'CTRL|SHIFT', action = snippets.picker },
+  { key = 'F12', mods = 'CTRL|SHIFT|ALT', action = snippets.promote },
   -- Alt-c to "click" links without mouse
   {
     key = 'c',

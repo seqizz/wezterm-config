@@ -1,29 +1,41 @@
--- Terminal snippet capture & paste.
+-- Terminal snippet capture & paste, backed by plain markdown (no database).
 --
 -- Local/remote zsh sessions emit a selected command via OSC 1337 SetUserVar
 -- (WEZ_SNIPPET_ADD, base64 JSON). This module receives the decoded JSON in the
--- 'user-var-changed' event, stores it in a local SQLite database (WAL mode),
--- and offers a picker (M.picker, bound in keys-common.lua) that pastes a chosen
--- snippet into the active pane WITHOUT a trailing newline.
+-- 'user-var-changed' event and appends it to an "inbox" file
+-- (~/syncfolder/wiki/unsorted.txt) as a '## heading' + fenced code block, in the
+-- exact same shape as the rest of the vimwiki cheatsheet.
 --
--- WezTerm's embedded Lua has no SQLite C binding (package.cpath is a dead end
--- on NixOS), so all operations shell out to the sqlite3 CLI via
--- wezterm.run_child_process. The overhead (~5-10 ms per call) is negligible for
--- user-triggered actions (explicit capture, picker open).
+-- The inbox is deliberately '.txt', not '.md': vimwiki releases the wiki to
+-- public HTML (gurkan.in/wiki) and VimwikiAll2HTML only processes the wiki ext
+-- (.md, see nvim nix.vim), so a .txt file is never published. Captured commands
+-- may be half-baked or host-specific, so they stay unreleased until filed.
+--
+-- The picker (M.picker, bound in keys-common.lua) parses every wiki *.md file
+-- plus the inbox live and pastes a chosen block WITHOUT a trailing newline.
+-- M.promote moves an inbox entry into its proper topic file (turning it into
+-- released content). Everything is one text format, git/sync-friendly and
+-- hand-editable; parsing ~35 small files in pure Lua is well under the picker's
+-- latency budget, so a SQLite layer bought nothing here.
 
 local wezterm = require('wezterm')
 
 local M = {}
 
-local DB_DIR = wezterm.home_dir .. '/syncfolder/dotfiles/snippetstore'
-local DB = DB_DIR .. '/snippets.db'
+-- vimwiki cheatsheet root: topic-per-file markdown, each entry a '##'/'###'
+-- heading followed by a fenced code block. Captures land in the inbox file;
+-- M.promote files them into the topic files alongside.
+local WIKI_DIR = wezterm.home_dir .. '/syncfolder/wiki'
+-- .txt on purpose: keeps the inbox out of the vimwiki .md HTML release.
+local UNSORTED_FILE = WIKI_DIR .. '/unsorted.txt'
 
 local MAX_PAYLOAD = 64 * 1024 -- reject decoded JSON larger than this
 local MAX_COMMAND = 16 * 1024 -- reject command text larger than this
 
 -- OSC events are untrusted: any process on the terminal can emit SetUserVar.
 -- Reject captures whose command matches an obvious secret marker. Plain-text
--- match (string.find 4th arg = true), case-sensitive on purpose.
+-- match (string.find 4th arg = true), case-sensitive on purpose. Matters even
+-- more now that captures are written to a plaintext, synced file.
 local SECRET_PATTERNS = {
   'password=',
   'passwd=',
@@ -40,103 +52,6 @@ local function trim(s)
   return (s:gsub('^%s+', ''):gsub('%s+$', ''))
 end
 
--- SQLite does not exist during config eval; run_child_process yields a
--- coroutine, which is illegal outside event/callback contexts. Lazily create
--- the database on first use.
-local db_ready = false
-
-local function ensure_db()
-  if db_ready then
-    return true
-  end
-  local ok, _, err = wezterm.run_child_process({ 'mkdir', '-p', DB_DIR })
-  if not ok then
-    wezterm.log_error('wez-snippets: mkdir failed: ' .. tostring(err))
-    return false
-  end
-  -- Schema is split into separate calls because PRAGMA output mixed with DDL
-  -- in a single sqlite3 CLI invocation can cause unexpected stdout.
-  ok, _, err = wezterm.run_child_process({ 'sqlite3', DB, 'PRAGMA journal_mode=WAL;' })
-  if not ok then
-    wezterm.log_error('wez-snippets: WAL pragma failed: ' .. tostring(err))
-    return false
-  end
-  ok, _, err = wezterm.run_child_process({ 'sqlite3', DB, [[
-    CREATE TABLE IF NOT EXISTS snippets (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      text TEXT NOT NULL,
-      comment TEXT,
-      source TEXT,
-      host TEXT,
-      user TEXT,
-      cwd TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL,
-      use_count INTEGER NOT NULL DEFAULT 0,
-      last_used_at INTEGER
-    );
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_text ON snippets(text);
-  ]] })
-  if not ok then
-    wezterm.log_error('wez-snippets: schema creation failed: ' .. tostring(err))
-    return false
-  end
-  -- Migrate databases created before the comment feature: add the column if
-  -- absent. ADD COLUMN on an existing column errors, so gate on pragma lookup.
-  local ok2, out = wezterm.run_child_process({
-    'sqlite3', DB, "SELECT COUNT(*) FROM pragma_table_info('snippets') WHERE name = 'comment';",
-  })
-  if ok2 and out and trim(out) == '0' then
-    wezterm.run_child_process({ 'sqlite3', DB, 'ALTER TABLE snippets ADD COLUMN comment TEXT;' })
-  end
-  db_ready = true
-  return true
-end
-
--- run_child_process returns (success_bool, stdout, stderr).
--- Execute a SQL statement (INSERT/UPDATE/DELETE/DDL). Returns true on success,
--- false on failure. Errors are logged.
-local function sql_exec(sql)
-  local ok, stdout, stderr = wezterm.run_child_process({ 'sqlite3', DB, sql })
-  if not ok then
-    wezterm.log_error('wez-snippets: sql exec failed: ' .. tostring(stderr))
-    return false
-  end
-  return true
-end
-
--- Execute a SELECT query with -json output. Returns parsed Lua table on
--- success, empty table on failure.
-local function sql_query(sql)
-  local ok, stdout, stderr =
-    wezterm.run_child_process({ 'sqlite3', DB, '-json', sql })
-  if not ok then
-    wezterm.log_error('wez-snippets: sql query failed: ' .. tostring(stderr))
-    return {}
-  end
-  if not stdout or stdout == '' then
-    return {}
-  end
-  local ok2, parsed = pcall(wezterm.json_parse, stdout)
-  if not ok2 or type(parsed) ~= 'table' then
-    wezterm.log_error('wez-snippets: bad json from sqlite3')
-    return {}
-  end
-  return parsed
-end
-
--- Escape a string for safe use as a SQLite string literal.
-local function sql_str(s)
-  if s == nil then
-    return 'NULL'
-  end
-  return "'" .. tostring(s):gsub("'", "''") .. "'"
-end
-
-local function now()
-  return os.time()
-end
-
 local function looks_like_secret(text)
   for _, p in ipairs(SECRET_PATTERNS) do
     if text:find(p, 1, true) then
@@ -145,11 +60,6 @@ local function looks_like_secret(text)
   end
   return false
 end
-
--- Id of the last snippet inserted/updated this session. Used to attach a
--- comment-only capture ('# ...') to the snippet just saved. Reset on config
--- reload, in which case attach_comment falls back to the newest DB row.
-local last_snippet_id = nil
 
 -- Split a captured line into (command, comment). A trailing note must be set
 -- off by whitespace before the '#' (' # ...'), so a '#' glued to command text
@@ -190,37 +100,167 @@ local function split_comment(raw)
   return cmd, comment
 end
 
--- Attach a comment-only capture to the last saved snippet (or the newest row
--- after a reload). Returns record, nil or nil, reason.
-local function attach_comment(comment)
-  local id = last_snippet_id
-  if not id then
-    local rows = sql_query('SELECT id FROM snippets ORDER BY created_at DESC, id DESC LIMIT 1')
-    if #rows == 0 then
-      return nil, 'no snippet to comment'
-    end
-    id = rows[1].id
+-- Fallback heading for a capture with no comment: the command itself, collapsed
+-- to one line and truncated. Kept human-readable so it is searchable in the
+-- picker and self-explanatory when sorting the inbox later.
+local function placeholder_heading(text)
+  local h = trim((text:gsub('%s+', ' ')))
+  if #h > 60 then
+    h = h:sub(1, 57) .. '...'
   end
-  if not sql_exec(string.format(
-    'UPDATE snippets SET comment = %s, updated_at = %d WHERE id = %s',
-    sql_str(comment), now(), sql_str(id)
-  )) then
-    return nil, 'db error'
-  end
-  local rows = sql_query(
-    string.format('SELECT * FROM snippets WHERE id = %s LIMIT 1', sql_str(id))
-  )
-  if #rows > 0 then
-    last_snippet_id = rows[1].id
-    return rows[1], nil
-  end
-  return { text = comment, use_count = 0 }, nil
+  return h
 end
 
--- Store a validated payload. Returns record, nil on success or nil, reason on
--- rejection. Deduplication is handled by the UNIQUE index on text: an identical
--- snippet gets its use_count bumped via ON CONFLICT instead of a duplicate row.
-local function add(payload)
+-- ---------------------------------------------------------------------------
+-- Markdown IO
+-- ---------------------------------------------------------------------------
+
+-- io is confirmed available in WezTerm's Lua (verified via io.open read+write).
+
+local function read_file(path)
+  local fh = io.open(path, 'r')
+  if not fh then
+    return nil
+  end
+  local c = fh:read('*a')
+  fh:close()
+  return c
+end
+
+local function write_file(path, content)
+  local fh = io.open(path, 'w')
+  if not fh then
+    return false
+  end
+  fh:write(content)
+  fh:close()
+  return true
+end
+
+-- Parse markdown text into a list of {topic, heading, code} entries. Rules: a
+-- '#'-prefixed line sets the current heading; a ``` line opens/closes a fenced
+-- block (language hints like ```bash are handled, the fence line is not code).
+-- Every closed block that has a current heading becomes an entry, so multiple
+-- blocks under one heading each yield an entry.
+local function parse_markdown(content, topic)
+  local entries = {}
+  if not content then
+    return entries
+  end
+  local heading = nil
+  local in_code = false
+  local code_lines = nil
+  for line in (content .. '\n'):gmatch('([^\n]*)\n') do
+    if in_code then
+      if line:match('^```') then
+        if heading and code_lines and #code_lines > 0 then
+          table.insert(entries, {
+            topic = topic,
+            heading = heading,
+            code = table.concat(code_lines, '\n'),
+          })
+        end
+        in_code = false
+        code_lines = nil
+      else
+        table.insert(code_lines, line)
+      end
+    elseif line:match('^```') then
+      in_code = true
+      code_lines = {}
+    else
+      local h = line:match('^#+%s+(.+)$')
+      if h then
+        heading = trim(h)
+      end
+    end
+  end
+  return entries
+end
+
+-- Load every wiki entry across all topic files (including the inbox). Read-only,
+-- run at picker open.
+local function load_wiki()
+  local all = {}
+  for _, path in ipairs(wezterm.glob(WIKI_DIR .. '/*.md')) do
+    local topic = path:match('([^/]+)%.md$') or path
+    for _, e in ipairs(parse_markdown(read_file(path), topic)) do
+      table.insert(all, e)
+    end
+  end
+  -- Inbox is '.txt' so the glob above skips it (that keeps it out of the
+  -- vimwiki HTML release); pull it in explicitly for the picker.
+  for _, e in ipairs(parse_markdown(read_file(UNSORTED_FILE), 'unsorted')) do
+    table.insert(all, e)
+  end
+  return all
+end
+
+-- Load the inbox entries (order preserved, newest last).
+local function load_unsorted()
+  return parse_markdown(read_file(UNSORTED_FILE), 'unsorted')
+end
+
+-- Rewrite the inbox file from an entries list in canonical form. The inbox is
+-- machine-managed: freeform prose between entries is not preserved, but edited
+-- headings/code survive (they are parsed back in). Entries keep their order.
+local function save_unsorted(entries)
+  local parts = {
+    '# Unsorted snippets',
+    '',
+    '<!-- Captured from the terminal via the wezterm snippet key. Move entries',
+    '     into their topic files to sort them; this inbox is machine-managed. -->',
+    '',
+  }
+  for _, e in ipairs(entries) do
+    table.insert(parts, '## ' .. e.heading)
+    table.insert(parts, '')
+    table.insert(parts, '```')
+    -- Extra parens truncate gsub's 2nd return (substitution count); otherwise it
+    -- leaks in as table.insert's value arg, turning this into the 3-arg
+    -- insert(list, pos, value) form and erroring "number expected, got string".
+    table.insert(parts, ((e.code or ''):gsub('\n+$', '')))
+    table.insert(parts, '```')
+    table.insert(parts, '')
+  end
+  return write_file(UNSORTED_FILE, table.concat(parts, '\n'))
+end
+
+-- Append an entry to a topic file, matching the existing wiki style (leading
+-- blank line, blank line after the heading).
+local function append_to_topic(path, heading, code)
+  local fh = io.open(path, 'a')
+  if not fh then
+    return false
+  end
+  fh:write('\n## ' .. heading .. '\n\n```\n' .. ((code or ''):gsub('\n+$', '')) .. '\n```\n')
+  fh:close()
+  return true
+end
+
+local function find_entry(entries, code)
+  for _, e in ipairs(entries) do
+    if e.code == code then
+      return e
+    end
+  end
+  return nil
+end
+
+-- ---------------------------------------------------------------------------
+-- Capture
+-- ---------------------------------------------------------------------------
+
+-- Text of the last command captured this session. A bare '# note' capture
+-- annotates that command's inbox entry (found by matching text, the same lookup
+-- dedup uses). Reset on config reload, in which case we fall back to the last
+-- inbox entry.
+local last_captured_text = nil
+
+-- Store a validated payload into the inbox. Returns entry, nil on success or
+-- nil, reason on rejection. Dedup is by command text: an identical command is
+-- not appended twice; re-capturing with a new comment updates its heading.
+local function capture(payload)
   local raw = payload.command
   if type(raw) ~= 'string' or #raw == 0 then
     return nil, 'empty command'
@@ -230,51 +270,49 @@ local function add(payload)
   end
 
   local text, comment = split_comment(raw)
+  local entries = load_unsorted()
 
-  -- No command part: a lone '# ...' capture updates the last snippet's comment.
+  -- Comment-only capture: annotate the last-captured command (or, after a
+  -- reload, the last inbox entry).
   if text == nil then
     if not comment then
       return nil, 'empty comment'
     end
-    return attach_comment(comment)
+    local target = last_captured_text and find_entry(entries, last_captured_text) or nil
+    target = target or entries[#entries]
+    if not target then
+      return nil, 'nothing to annotate'
+    end
+    target.heading = comment
+    if not save_unsorted(entries) then
+      return nil, 'write failed'
+    end
+    return target
   end
 
   if looks_like_secret(text) then
     return nil, 'looks like secret'
   end
 
-  local t = now()
-  local sql = string.format(
-    [[INSERT INTO snippets (text, comment, source, host, user, cwd, created_at, updated_at)
-      VALUES (%s, %s, %s, %s, %s, %s, %d, %d)
-      ON CONFLICT(text) DO UPDATE SET
-        use_count = use_count + 1,
-        updated_at = excluded.updated_at,
-        comment = COALESCE(excluded.comment, snippets.comment)]],
-    sql_str(text),
-    sql_str(comment),
-    sql_str(payload.source),
-    sql_str(payload.host),
-    sql_str(payload.user),
-    sql_str(payload.cwd),
-    t,
-    t
-  )
-  if not sql_exec(sql) then
-    return nil, 'db error'
+  last_captured_text = text
+  local existing = find_entry(entries, text)
+  if existing then
+    -- Dedup: only touch the file when a new comment actually changes something.
+    if comment and #comment > 0 and existing.heading ~= comment then
+      existing.heading = comment
+      if not save_unsorted(entries) then
+        return nil, 'write failed'
+      end
+    end
+    return existing
   end
 
-  -- Fetch the row back (either newly inserted or the conflicted one) for the
-  -- toast notification and to remember it as the comment-attach target.
-  local rows = sql_query(
-    string.format('SELECT * FROM snippets WHERE text = %s LIMIT 1', sql_str(text))
-  )
-  if #rows > 0 then
-    last_snippet_id = rows[1].id
-    return rows[1], nil
+  local entry = { heading = comment or placeholder_heading(text), code = text }
+  table.insert(entries, entry)
+  if not save_unsorted(entries) then
+    return nil, 'write failed'
   end
-  -- Should not happen, but return a minimal record rather than nil.
-  return { text = text, use_count = 0 }, nil
+  return entry
 end
 
 wezterm.on('user-var-changed', function(window, pane, name, value)
@@ -294,13 +332,9 @@ wezterm.on('user-var-changed', function(window, pane, name, value)
     return
   end
 
-  if not ensure_db() then
-    window:toast_notification('wez-snippets', 'rejected: db init failed', nil, 4000)
-    return
-  end
-  local rec, err = add(payload)
+  local rec, err = capture(payload)
   if rec then
-    local short = rec.text:gsub('%s+', ' ')
+    local short = rec.heading:gsub('%s+', ' ')
     if #short > 60 then
       short = short:sub(1, 57) .. '...'
     end
@@ -310,31 +344,33 @@ wezterm.on('user-var-changed', function(window, pane, name, value)
   end
 end)
 
--- Picker action, bound to a key in keys-common.lua. Lists snippets
--- most-recently-used first and pastes the selection into the active pane.
+-- ---------------------------------------------------------------------------
+-- Picker / promote actions
+-- ---------------------------------------------------------------------------
+
+-- Picker action, bound to a key in keys-common.lua. Lists every wiki entry
+-- (topic files + inbox) and pastes the selected block into the active pane.
 M.picker = wezterm.action_callback(function(window, pane)
-  if not ensure_db() then
-    window:toast_notification('wez-snippets', 'db init failed', nil, 3000)
-    return
-  end
-  local rows = sql_query(
-    'SELECT * FROM snippets ORDER BY last_used_at DESC, use_count DESC'
-  )
-  if #rows == 0 then
-    window:toast_notification('wez-snippets', 'no snippets saved', nil, 3000)
-    return
+  local choices = {}
+  -- Code is kept in the closure (not re-queried) and pasted verbatim; heading +
+  -- topic go in the label for fuzzy search.
+  local code_by_id = {}
+  for i, e in ipairs(load_wiki()) do
+    local id = tostring(i)
+    code_by_id[id] = e.code
+    local preview = e.code:gsub('%s+', ' ')
+    if #preview > 60 then
+      preview = preview:sub(1, 57) .. '...'
+    end
+    table.insert(choices, {
+      id = id,
+      label = '[' .. e.topic .. '] ' .. e.heading .. '  » ' .. preview,
+    })
   end
 
-  local choices = {}
-  for _, s in ipairs(rows) do
-    local preview = (s.text or ''):gsub('%s+', ' ')
-    if #preview > 80 then
-      preview = preview:sub(1, 77) .. '...'
-    end
-    local origin = s.host and ('[' .. s.host .. '] ') or ''
-    -- Comment is appended to the label so InputSelector's fuzzy match hits it.
-    local note = (s.comment and #s.comment > 0) and ('  # ' .. s.comment) or ''
-    table.insert(choices, { id = tostring(s.id), label = origin .. preview .. note })
+  if #choices == 0 then
+    window:toast_notification('wez-snippets', 'no snippets saved', nil, 3000)
+    return
   end
 
   window:perform_action(
@@ -343,24 +379,93 @@ M.picker = wezterm.action_callback(function(window, pane)
       choices = choices,
       fuzzy = true,
       action = wezterm.action_callback(function(inner_window, inner_pane, id, label)
-        if not id then
+        if not id or not code_by_id[id] then
           return
         end
-        local t = now()
-        sql_exec(string.format(
-          'UPDATE snippets SET use_count = use_count + 1, last_used_at = %d WHERE id = %s',
-          t,
-          sql_str(id)
-        ))
-        -- Fetch the text to paste. The id came from our own query so integer
-        -- coercion is safe; sql_str wraps it in quotes for SQLite.
-        local rows = sql_query(
-          string.format('SELECT text FROM snippets WHERE id = %s', sql_str(id))
-        )
-        if #rows > 0 then
-          -- strip trailing newline: insert without executing
-          inner_pane:send_text((rows[1].text or ''):gsub('\n+$', ''))
+        -- strip trailing newline: insert without executing
+        -- extra parens: drop gsub's 2nd return (count) so only the string passes
+        inner_pane:send_text(((code_by_id[id]):gsub('\n+$', '')))
+      end),
+    }),
+    pane
+  )
+end)
+
+-- Promote action (bind in keys-common.lua): move an inbox entry into its proper
+-- topic file. Appends there and removes it from the inbox, so unsorted.md stays
+-- a shrinking to-do list.
+M.promote = wezterm.action_callback(function(window, pane)
+  local entries = load_unsorted()
+  if #entries == 0 then
+    window:toast_notification('wez-snippets', 'inbox empty, nothing to sort', nil, 3000)
+    return
+  end
+
+  local choices = {}
+  local by_id = {}
+  for i, e in ipairs(entries) do
+    local id = tostring(i)
+    by_id[id] = e
+    local preview = e.code:gsub('%s+', ' ')
+    if #preview > 60 then
+      preview = preview:sub(1, 57) .. '...'
+    end
+    table.insert(choices, { id = id, label = e.heading .. '  » ' .. preview })
+  end
+
+  window:perform_action(
+    wezterm.action.InputSelector({
+      title = 'Promote inbox snippet',
+      choices = choices,
+      fuzzy = true,
+      action = wezterm.action_callback(function(inner_window, inner_pane, id)
+        if not id or not by_id[id] then
+          return
         end
+        local entry = by_id[id]
+
+        -- Second selector: the target topic file (all wiki files except the
+        -- inbox itself).
+        local topics = {}
+        for _, path in ipairs(wezterm.glob(WIKI_DIR .. '/*.md')) do
+          if path ~= UNSORTED_FILE then
+            table.insert(topics, { id = path, label = path:match('([^/]+)$') or path })
+          end
+        end
+
+        inner_window:perform_action(
+          wezterm.action.InputSelector({
+            title = 'File "' .. entry.heading .. '" into topic',
+            choices = topics,
+            fuzzy = true,
+            action = wezterm.action_callback(function(w, p, path)
+              if not path then
+                return
+              end
+              if not append_to_topic(path, entry.heading, entry.code) then
+                w:toast_notification('wez-snippets', 'topic write failed', nil, 4000)
+                return
+              end
+              -- Reload the inbox fresh (a capture may have landed meanwhile) and
+              -- drop the promoted entry by matching command text.
+              local cur = load_unsorted()
+              local kept = {}
+              for _, e in ipairs(cur) do
+                if e.code ~= entry.code then
+                  table.insert(kept, e)
+                end
+              end
+              save_unsorted(kept)
+              w:toast_notification(
+                'wez-snippets',
+                'filed into ' .. (path:match('([^/]+)$') or path),
+                nil,
+                3000
+              )
+            end),
+          }),
+          p
+        )
       end),
     }),
     pane
