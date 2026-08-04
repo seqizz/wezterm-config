@@ -358,10 +358,12 @@ M.picker = wezterm.action_callback(function(window, pane)
   for i, e in ipairs(load_wiki()) do
     local id = tostring(i)
     code_by_id[id] = e.code
+    -- Full command (whitespace-collapsed, NOT truncated) goes in the label:
+    -- InputSelector fuzzy-matches the label string, so a truncated preview would
+    -- make anything past the cut unsearchable (e.g. a var deep in a long command).
+    -- The row still reads well because topic + heading lead; wezterm visually
+    -- truncates the long tail while keeping the whole string matchable.
     local preview = e.code:gsub('%s+', ' ')
-    if #preview > 60 then
-      preview = preview:sub(1, 57) .. '...'
-    end
     table.insert(choices, {
       id = id,
       label = '[' .. e.topic .. '] ' .. e.heading .. '  » ' .. preview,
@@ -406,10 +408,8 @@ M.promote = wezterm.action_callback(function(window, pane)
   for i, e in ipairs(entries) do
     local id = tostring(i)
     by_id[id] = e
+    -- Full command in the label so fuzzy search reaches the tail (see picker).
     local preview = e.code:gsub('%s+', ' ')
-    if #preview > 60 then
-      preview = preview:sub(1, 57) .. '...'
-    end
     table.insert(choices, { id = id, label = e.heading .. '  » ' .. preview })
   end
 
