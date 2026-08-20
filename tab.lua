@@ -94,6 +94,22 @@ local icon_variants = utils.map({
   error('unexpected type')
 end)
 
+-- App-agnostic tab alerting. Any process in a pane can publish its state with the
+-- `alert_state` user var (OSC 1337 SetUserVar); the tab then swaps its icon and,
+-- when inactive, its background color. Icon is replaced rather than appended so
+-- the grow-to-need width math below stays untouched.
+local ALERT_STATES = {
+  waiting = { icon = wezterm.nerdfonts.fa_question_circle, color = '#fb4934' },
+  done    = { icon = wezterm.nerdfonts.fa_check_circle,    color = '#b8bb26' },
+  busy    = { icon = wezterm.nerdfonts.fa_hourglass_half,  color = '#83a598' },
+  failed  = { icon = wezterm.nerdfonts.fa_times_circle,    color = '#cc241d' },
+}
+
+-- tab_id -> state value the user already saw in the foreground. An alert is an
+-- *unread* marker: rendering a tab while it is active counts as reading it, so the
+-- tab falls back to normal colors until the publisher sends a different state.
+local alert_ack = {}
+
 function tab_title(tab_info)
   local title = tab_info.tab_title
   -- if the tab title is explicitly set, take that
@@ -185,6 +201,21 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
   end
 
   local icon = tab_icons[tab.tab_id]
+
+  -- Only the active pane of the tab is inspectable here: format-tab-title's `panes`
+  -- argument holds the *active* tab's panes and PaneInformation carries no tab_id.
+  local state = (tab.active_pane.user_vars or {}).alert_state or ''
+  local alert = ALERT_STATES[state]
+  if not alert then
+    alert_ack[tab.tab_id] = nil   -- publisher cleared the var, forget the ack too
+  elseif tab.is_active then
+    alert_ack[tab.tab_id] = state
+  end
+  if alert and alert_ack[tab.tab_id] ~= state then
+    icon = alert.icon or icon   -- keep the random icon if the glyph name is missing
+    background = alert.color
+    foreground = '#1c1b19'
+  end
 
   local left_arrow = SOLID_LEFT_ARROW
   if tab.tab_index == 0 then
