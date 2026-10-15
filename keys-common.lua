@@ -2,6 +2,9 @@ local wezterm = require('wezterm')
 -- requiring the module registers its 'user-var-changed' capture handler and
 -- exposes the picker action bound below (Ctrl-Shift-S)
 local snippets = require('snippets')
+-- mid-session sync for a jailed coding agent, keyed off the
+-- 'llm_custody_sync' user var the jail runner publishes
+local llm_custody = require('llm-custody')
 function concat_table(t1, t2)
   for i = 1, #t2 do
     t1[#t1 + 1] = t2[i]
@@ -40,12 +43,17 @@ common_keys = {
   --   plain      -> inject the Shift-F5 sequence the zsh bindkey captures on
   --   Ctrl       -> open the snippet picker
   --   Ctrl+Shift -> promote a captured snippet into the vimwiki cheatsheet
+  --   Alt        -> sync a running llm-custody jail session back to the host
   { key = 'raw:195', action = wezterm.action.SendString('\x1b[15;2~') },
   { key = 'raw:195', mods = 'CTRL', action = snippets.picker },
   { key = 'raw:195', mods = 'CTRL|SHIFT', action = snippets.promote },
+  { key = 'raw:195', mods = 'ALT', action = llm_custody.sync },
   { key = 'F12', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'F12', mods = 'CTRL|SHIFT', action = snippets.picker },
   { key = 'F12', mods = 'CTRL|SHIFT|ALT', action = snippets.promote },
+  -- Keyboard-independent alias for the launch-key binding above (F-keys are
+  -- taken at WM level here)
+  { key = 's', mods = 'CTRL|SHIFT', action = llm_custody.sync },
   -- Alt-c to "click" links without mouse
   {
     key = 'c',
