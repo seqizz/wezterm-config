@@ -1,5 +1,9 @@
 local wezterm = require('wezterm')
 local utils = require('utils')
+-- Owns the jail badge (marker + unsynced-change count); see its tab_badge /
+-- badge_width. Required here as well as in keys-common.lua - require caches,
+-- so both get the same module regardless of load order.
+local llm_custody = require('llm-custody')
 
 local MAX_TAB_WIDTH = 9999   -- no hard cap, let wezterm distribute available space across tabs
 local MAX_TEXT_LENGTH = 60   -- upstream substring guard, real sizing done in format-tab-title
@@ -171,13 +175,15 @@ local SUB_IDX = {
 }
 
 -- Cells taken by everything except the title text: left arrow, index, icon,
--- the space after the icon, the trailing space, and the right arrow.
+-- the space after the icon, the trailing space, the right arrow, and the
+-- jail badge where there is one (0 for every tab that is not a jail
+-- session).
 local function tab_fixed_width(t)
   local id_w = wezterm.column_width(SUB_IDX[t.tab_index + 1] or '?')
   local icon = tab_icons[t.tab_id]
   local icon_w = icon and wezterm.column_width(icon) or 1
   -- 1 left arrow + id + icon + 2 spaces + 1 right arrow
-  return 1 + id_w + icon_w + 2 + 1
+  return 1 + id_w + icon_w + 2 + 1 + llm_custody.badge_width(t)
 end
 
 wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_width)
@@ -255,7 +261,7 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
 
   local title = wezterm.truncate_right(tab_title(tab), title_budget)
 
-  return {
+  local elements = {
     { Attribute = { Intensity = 'Bold' } },
     { Background = { Color = edge_background } },
     { Foreground = { Color = background } },
@@ -265,6 +271,25 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
     { Text = id },
     { Text = icon },
     { Text = ' ' },
+  }
+
+  -- Jail badge sits between the icon and the title, as its own segment
+  -- rather than glued onto the title string: it must keep its own color,
+  -- and it must never be what truncate_right eats when the bar is tight.
+  -- Its cells are already reserved by tab_fixed_width above.
+  local badge, badge_dirty = llm_custody.tab_badge(tab)
+  if badge then
+    if badge_dirty then
+      table.insert(elements, { Foreground = { Color = llm_custody.dirty_color } })
+      table.insert(elements, { Text = badge })
+      table.insert(elements, { Foreground = { Color = foreground } })
+    else
+      table.insert(elements, { Text = badge })
+    end
+    table.insert(elements, { Text = ' ' })
+  end
+
+  for _, element in ipairs({
     { Background = { Color = background } },
     { Foreground = { Color = foreground } },
     { Text = title },
@@ -273,7 +298,11 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
     { Foreground = { Color = background } },
     { Text = SOLID_RIGHT_ARROW },
     { Attribute = { Intensity = 'Normal' } },
-  }
+  }) do
+    table.insert(elements, element)
+  end
+
+  return elements
 end)
 
 return {
