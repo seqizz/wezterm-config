@@ -85,10 +85,8 @@ end)
 -- treat_east_asian_ambiguous_width_as_wide.
 local MARK = '▥'
 
--- Gruvbox bright red, same palette as tab.lua's ALERT_STATES. Chosen over
--- the darker reds because the tab that most needs to catch the eye is an
--- *inactive* one, and those are drawn on mid-gray.
-local DIRTY_COLOR = '#fb4934'
+-- Gruvbox bright green to be seen, same palette as tab.lua's ALERT_STATES.
+local DIRTY_COLOR = '#03fc52'
 
 M.dirty_color = DIRTY_COLOR
 
