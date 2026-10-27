@@ -44,16 +44,19 @@ common_keys = {
   --   Ctrl       -> open the snippet picker
   --   Ctrl+Shift -> promote a captured snippet into the vimwiki cheatsheet
   --   Alt        -> sync a running llm-custody jail session back to the host
+  --   Ctrl+Alt   -> add a package to that session's toolbox (its PATH)
   { key = 'raw:195', action = wezterm.action.SendString('\x1b[15;2~') },
   { key = 'raw:195', mods = 'CTRL', action = snippets.picker },
   { key = 'raw:195', mods = 'CTRL|SHIFT', action = snippets.promote },
   { key = 'raw:195', mods = 'ALT', action = llm_custody.sync },
+  { key = 'raw:195', mods = 'CTRL|ALT', action = llm_custody.toolbox },
   { key = 'F12', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'F12', mods = 'CTRL|SHIFT', action = snippets.picker },
   { key = 'F12', mods = 'CTRL|SHIFT|ALT', action = snippets.promote },
-  -- Keyboard-independent alias for the launch-key binding above (F-keys are
-  -- taken at WM level here)
+  -- Keyboard-independent aliases for the launch-key bindings above (F-keys
+  -- are taken at WM level here)
   { key = 's', mods = 'CTRL|SHIFT', action = llm_custody.sync },
+  { key = 'a', mods = 'CTRL|SHIFT', action = llm_custody.toolbox },
   -- Alt-c to "click" links without mouse
   {
     key = 'c',
