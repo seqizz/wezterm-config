@@ -50,7 +50,6 @@ common_keys = {
   { key = 'raw:195', mods = 'CTRL|SHIFT', action = snippets.promote },
   { key = 'raw:195', mods = 'ALT', action = llm_custody.sync },
   { key = 'raw:195', mods = 'CTRL|ALT', action = llm_custody.toolbox },
-  { key = 'F12', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'F12', mods = 'CTRL|SHIFT', action = snippets.picker },
   { key = 'F12', mods = 'CTRL|SHIFT|ALT', action = snippets.promote },
   -- Keyboard-independent aliases for the launch-key bindings above (F-keys

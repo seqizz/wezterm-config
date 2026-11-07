@@ -5,29 +5,16 @@ local utils = require('utils')
 -- so both get the same module regardless of load order.
 local llm_custody = require('llm-custody')
 
-local MAX_TAB_WIDTH = 9999   -- no hard cap, let wezterm distribute available space across tabs
-local MAX_TEXT_LENGTH = 60   -- upstream substring guard, real sizing done in format-tab-title
-local MAX_TITLE_CAP = 24     -- most title cells a single tab will ever claim
-local MIN_TITLE = 2          -- floor for the title text budget when tabs must shrink to fit
+local MAX_TAB_WIDTH = 9999 -- no hard cap, let wezterm distribute available space across tabs
+local MAX_TEXT_LENGTH = 60 -- upstream substring guard, real sizing done in format-tab-title
+local MAX_TITLE_CAP = 24 -- most title cells a single tab will ever claim
+local MIN_TITLE = 2 -- floor for the title text budget when tabs must shrink to fit
 
 local CONFIG = {
   padding = 1,
   use_icons = true,
-  use_icon_colors = false,  -- TODO: fucks up foreground color of the text
+  use_icon_colors = false, -- TODO: fucks up foreground color of the text
 }
-
-local function dump(o)
-   if type(o) == 'table' then
-      local s = '{ '
-      for k,v in pairs(o) do
-         if type(k) ~= 'number' then k = '"'..k..'"' end
-         s = s .. '['..k..'] = ' .. dump(v) .. ','
-      end
-      return s .. '} '
-   else
-      return tostring(o)
-   end
-end
 
 math.randomseed(os.time())
 local tab_icons = {}
@@ -104,9 +91,9 @@ end)
 -- the grow-to-need width math below stays untouched.
 local ALERT_STATES = {
   waiting = { icon = wezterm.nerdfonts.fa_question_circle, color = '#fb4934' },
-  done    = { icon = wezterm.nerdfonts.fa_check_circle,    color = '#b8bb26' },
-  busy    = { icon = wezterm.nerdfonts.fa_hourglass_half,  color = '#83a598' },
-  failed  = { icon = wezterm.nerdfonts.fa_times_circle,    color = '#cc241d' },
+  done = { icon = wezterm.nerdfonts.fa_check_circle, color = '#b8bb26' },
+  busy = { icon = wezterm.nerdfonts.fa_hourglass_half, color = '#83a598' },
+  failed = { icon = wezterm.nerdfonts.fa_times_circle, color = '#cc241d' },
 }
 
 -- tab_id -> state value the user already saw in the foreground. An alert is an
@@ -114,7 +101,7 @@ local ALERT_STATES = {
 -- tab falls back to normal colors until the publisher sends a different state.
 local alert_ack = {}
 
-function tab_title(tab_info)
+local function tab_title(tab_info)
   local title = tab_info.tab_title
   -- if the tab title is explicitly set, take that
   if title and #title > 0 then
@@ -213,12 +200,12 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
   local state = (tab.active_pane.user_vars or {}).alert_state or ''
   local alert = ALERT_STATES[state]
   if not alert then
-    alert_ack[tab.tab_id] = nil   -- publisher cleared the var, forget the ack too
+    alert_ack[tab.tab_id] = nil -- publisher cleared the var, forget the ack too
   elseif tab.is_active then
     alert_ack[tab.tab_id] = state
   end
   if alert and alert_ack[tab.tab_id] ~= state then
-    icon = alert.icon or icon   -- keep the random icon if the glyph name is missing
+    icon = alert.icon or icon -- keep the random icon if the glyph name is missing
     background = alert.color
     foreground = '#1c1b19'
   end
@@ -238,14 +225,35 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
   local reserved = (wezterm.GLOBAL.rstatus_w or 0) + (wezterm.GLOBAL.lstatus_w or 0) + 1
   local avail = math.max(0, cols - reserved)
 
-  local sum_fixed = 0     -- decoration cells across all tabs
-  local sum_desired = 0   -- title cells all tabs would like
-  local this_desired = 0  -- title cells this tab would like
+  local sum_fixed = 0 -- decoration cells across all tabs
+  local sum_desired = 0 -- title cells all tabs would like
+  local this_desired = 0 -- title cells this tab would like
+  local live = {} -- tab ids still open, for the cache prune below
   for _, t in ipairs(tabs) do
     local desired = math.min(wezterm.column_width(tab_title(t)), MAX_TITLE_CAP)
     sum_fixed = sum_fixed + tab_fixed_width(t)
     sum_desired = sum_desired + desired
-    if t.tab_id == tab.tab_id then this_desired = desired end
+    live[t.tab_id] = true
+    if t.tab_id == tab.tab_id then
+      this_desired = desired
+    end
+  end
+
+  -- Both caches are keyed by tab_id and nothing else ever removes an entry, so
+  -- closed tabs would accumulate for the lifetime of the gui process. Prune
+  -- while rendering the first tab: this handler runs once per tab per repaint,
+  -- and `tabs` is the authoritative live set at that moment.
+  if tab.tab_index == 0 then
+    for id in pairs(tab_icons) do
+      if not live[id] then
+        tab_icons[id] = nil
+      end
+    end
+    for id in pairs(alert_ack) do
+      if not live[id] then
+        alert_ack[id] = nil
+      end
+    end
   end
 
   local avail_titles = math.max(0, avail - sum_fixed)

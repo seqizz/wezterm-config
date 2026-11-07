@@ -9,7 +9,7 @@ local function render_battery(battery, fg_color)
   local icon_name
 
   if battery.state == 'Charging' then
-      icon_name = prefix .. '_charging'
+    icon_name = prefix .. '_charging'
   elseif battery.state_of_charge > 0.9 then
     icon_name = prefix
   else
@@ -17,7 +17,7 @@ local function render_battery(battery, fg_color)
     icon_name = prefix .. '_' .. suffix
   end
 
-  local color = battery.state_of_charge<= 0.1 and 'Red' or 'Green'
+  local color = battery.state_of_charge <= 0.1 and 'Red' or 'Green'
   local plain = icons[icon_name] .. string.format(' %.0f%%', battery.state_of_charge * 100)
   local formatted = wezterm.format({
     { Foreground = { AnsiColor = color } },
@@ -33,31 +33,40 @@ local function update_left_status(window, pane)
   local indicators = {}
 
   if key_table == 'copy_mode' then
-    table.insert(indicators, wezterm.format({
-      { Attribute = { Intensity = 'Bold' } },
-      { Background = { AnsiColor = 'Red' } },
-      { Foreground = { AnsiColor = 'White' } },
-      { Text = ' ' .. wezterm.nerdfonts['md_content_copy'] .. ' COPY ' },
-    }))
+    table.insert(
+      indicators,
+      wezterm.format({
+        { Attribute = { Intensity = 'Bold' } },
+        { Background = { AnsiColor = 'Red' } },
+        { Foreground = { AnsiColor = 'White' } },
+        { Text = ' ' .. wezterm.nerdfonts['md_content_copy'] .. ' COPY ' },
+      })
+    )
   elseif key_table == 'search_mode' then
-    table.insert(indicators, wezterm.format({
-      { Attribute = { Intensity = 'Bold' } },
-      { Background = { AnsiColor = 'Blue' } },
-      { Foreground = { AnsiColor = 'White' } },
-      { Text = ' SEARCH ' },
-    }))
+    table.insert(
+      indicators,
+      wezterm.format({
+        { Attribute = { Intensity = 'Bold' } },
+        { Background = { AnsiColor = 'Blue' } },
+        { Foreground = { AnsiColor = 'White' } },
+        { Text = ' SEARCH ' },
+      })
+    )
   end
 
   -- zoom state lives on PaneInformation, not Pane userdata
   local tab = window:active_tab()
   for _, p in ipairs(tab:panes_with_info()) do
     if p.is_zoomed then
-      table.insert(indicators, wezterm.format({
-        { Attribute = { Intensity = 'Bold' } },
-        { Background = { AnsiColor = 'Blue' } },
-        { Foreground = { AnsiColor = 'White' } },
-        { Text = ' ' .. wezterm.nerdfonts['md_magnify_plus'] .. ' ZOOM ' },
-      }))
+      table.insert(
+        indicators,
+        wezterm.format({
+          { Attribute = { Intensity = 'Bold' } },
+          { Background = { AnsiColor = 'Blue' } },
+          { Foreground = { AnsiColor = 'White' } },
+          { Text = ' ' .. wezterm.nerdfonts['md_magnify_plus'] .. ' ZOOM ' },
+        })
+      )
       break
     end
   end
@@ -85,68 +94,63 @@ end
 local function update_right_status(window, pane)
   -- "Wed Mar 3 08:14"
   local date = wezterm.strftime('%a %b %-d %H:%M')
+  local host = string.format(' %s ', wezterm.hostname())
 
-  local tilde = wezterm.format({
-    { Foreground = { AnsiColor = 'Fuchsia' } },
-    { Text = '~' },
-  })
-
-  local hostname = wezterm.format({
-    { Text = string.format(' %s ', wezterm.hostname()) },
-  })
-
-  local battery
-  local battery_plain = ''
-
+  local battery, battery_plain
   for _, b in ipairs(wezterm.battery_info()) do
     battery, battery_plain = render_battery(b, '#1c1b19')
   end
 
   local SOLID_LEFT_ARROW = utf8.char(0xe0ba)
-  local SOLID_RIGHT_MOST = utf8.char(0x2588)
-  local SOLID_RIGHT_ARROW = utf8.char(0xe0bc)
   local background = '#d79921'
   local foreground = '#1c1b19'
 
-  window:set_right_status(wezterm.format({
-    -- { Attribute = { Intensity = 'Bold' } },
-    { Background = { Color = foreground } },
-    { Foreground = { Color = background } },
-    { Text = SOLID_LEFT_ARROW },
-    { Background = { Color = background } },
-    { Foreground = { Color = foreground } },
-    { Text = battery },
-    { Background = { Color = background } },
-    { Foreground = { Color = '#1c1b18' } }, -- NVIDIA workaround.. Most valuable company in the whole world!
-    { Text = SOLID_LEFT_ARROW },
-    { Background = { Color = foreground } },
-    { Text = ' ' },
-    { Background = { Color = foreground } },
-    { Foreground = { Color = background } },
-    { Text = SOLID_LEFT_ARROW },
-    { Background = { Color = background } },
-    { Foreground = { Color = foreground } },
-    { Text = date },
-    { Background = { Color = background } },
-    { Foreground = { Color = foreground } },
-    { Text = SOLID_LEFT_ARROW },
-    { Background = { Color = foreground } },
-    { Text = ' ' },
-    { Background = { Color = foreground } },
-    { Foreground = { Color = background } },
-    { Text = SOLID_LEFT_ARROW },
-    { Background = { Color = background } },
-    { Foreground = { Color = foreground } },
-    { Text = hostname },
-  }))
+  -- Segments in display order, each carrying both its drawn form and the plain
+  -- text the published width is measured from, so the two cannot drift apart.
+  -- A host with no battery reports an empty battery_info list and simply has no
+  -- battery segment: rendering it anyway would put a nil into a { Text = ... }
+  -- element, which wezterm.format rejects, taking the whole right status (and
+  -- with it the rstatus_w that tab.lua sizes tabs against) down with it.
+  -- `arrow_fg` colors the arrow drawn *after* the segment.
+  local segments = {}
+  if battery then
+    -- NVIDIA workaround.. Most valuable company in the whole world!
+    segments[#segments + 1] = { text = battery, plain = battery_plain, arrow_fg = '#1c1b18' }
+  end
+  segments[#segments + 1] = { text = date, plain = date, arrow_fg = foreground }
+  segments[#segments + 1] = { text = host, plain = host }
+
+  local elements = {}
+  local function push(e) elements[#elements + 1] = e end
+
+  for i, seg in ipairs(segments) do
+    -- Arrow into the segment, drawn in the segment color over the dark edge.
+    push({ Background = { Color = foreground } })
+    push({ Foreground = { Color = background } })
+    push({ Text = SOLID_LEFT_ARROW })
+    push({ Background = { Color = background } })
+    push({ Foreground = { Color = foreground } })
+    push({ Text = seg.text })
+    -- The last segment runs to the edge of the bar, so it gets no closing
+    -- arrow and no separating space.
+    if i < #segments then
+      push({ Background = { Color = background } })
+      push({ Foreground = { Color = seg.arrow_fg } })
+      push({ Text = SOLID_LEFT_ARROW })
+      push({ Background = { Color = foreground } })
+      push({ Text = ' ' })
+    end
+  end
+
+  window:set_right_status(wezterm.format(elements))
 
   -- Publish widths + total terminal columns so tab.lua can size tabs to fill.
-  -- Right status visible parts: 5 powerline arrows + 2 spaces + battery + date + hostname.
-  local rw = wezterm.column_width(battery_plain)
-           + wezterm.column_width(date)
-           + wezterm.column_width(string.format(' %s ', wezterm.hostname()))
-           + 5  -- SOLID_LEFT_ARROW glyphs (1 cell each)
-           + 2  -- literal spaces between segments
+  -- Two powerline arrows per segment bar the trailing one, plus a space between
+  -- each pair: 5 arrows and 2 spaces for the usual battery/date/host trio.
+  local rw = (2 * #segments - 1) + (#segments - 1)
+  for _, seg in ipairs(segments) do
+    rw = rw + wezterm.column_width(seg.plain)
+  end
   wezterm.GLOBAL.rstatus_w = rw
 
   -- MuxTab:get_size() gives the whole tab grid (full width, ignores splits),

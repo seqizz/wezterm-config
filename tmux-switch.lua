@@ -25,13 +25,24 @@ tmux_keys = {
   { key = 'k', mods = 'ALT', action = 'DisableDefaultAssignment' },
   { key = 'z', mods = 'ALT', action = 'DisableDefaultAssignment' },
 }
+
+-- Built once at load, not per event: concat_table appends in place, so calling
+-- it inside the handler re-appends the whole of common_keys to tmux_keys every
+-- time a shell sets the var, and the key list grows without bound over a
+-- session.
+local tmux_mode_keys = concat_table(tmux_keys, common_keys)
+
 return {
   wezterm.on('user-var-changed', function(window, pane, name, value)
-    wezterm.log_info('var', name, value)
     if name == 'wezterm_disabletabs' then
+      -- Logged only for this module's own var. The same event also delivers
+      -- WEZ_SNIPPET_ADD, whose value is raw captured command text, and the gui
+      -- log is a plaintext file on disk that snippets.lua's secret filter never
+      -- gets to see.
+      wezterm.log_info('var', name, value)
       window:set_config_overrides({
         hide_tab_bar_if_only_one_tab = true,
-        keys = concat_table(tmux_keys, common_keys),
+        keys = tmux_mode_keys,
         background = {
           { source = { Color = '#282828' }, opacity = 0.95, width = '100%', height = '100%' },
           {

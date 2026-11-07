@@ -1,30 +1,30 @@
-local wezterm = require 'wezterm'
+local wezterm = require('wezterm')
 local M = {}
 
 --- Merges two tables, overwriting common elements from table_b
 --- @param ... table[]
 --- @return table
 function M.merge(...)
-   local args = table.pack(...)
-   local merged = {}
+  local args = table.pack(...)
+  local merged = {}
 
-   for i = 1, args.n do
-      if type(args[i]) == 'string' then
-         error(args[i])
-      end
-      for k, v in pairs(args[i]) do
-         merged[k] = v
-      end
-   end
+  for i = 1, args.n do
+    if type(args[i]) == 'string' then
+      error(args[i])
+    end
+    for k, v in pairs(args[i]) do
+      merged[k] = v
+    end
+  end
 
-   return merged
+  return merged
 end
 
 --- @param module string
 --- @return any
 function M.req(module)
-   local m = require(module)
-   return m
+  local m = require(module)
+  return m
 end
 
 --- Returns a new list with function applied to each element of the list
@@ -34,12 +34,12 @@ end
 --- @param func fun(t: T): G
 --- @return G[]
 function M.map(list, func)
-   local mapped = {}
-   for i, v in ipairs(list) do
-      mapped[i] = func(v)
-   end
+  local mapped = {}
+  for i, v in ipairs(list) do
+    mapped[i] = func(v)
+  end
 
-   return mapped
+  return mapped
 end
 
 function M.dump(o, level)
@@ -49,17 +49,16 @@ function M.dump(o, level)
     local l = string.rep('  ', level)
     local s = l .. '{\n'
     local c = l .. '}'
-    for k,v in pairs(o) do
+    for k, v in pairs(o) do
       if type(k) ~= 'number' then
-        k = '"'..tostring(k)..'"'
+        k = '"' .. tostring(k) .. '"'
       end
-      s = s .. l .. '['..tostring(k)..'] = ' .. my_utils.dump(v, level + 1) .. ',\n'
+      s = s .. l .. '[' .. tostring(k) .. '] = ' .. M.dump(v, level + 1) .. ',\n'
     end
     return s .. c
-   else
+  else
     return tostring(o)
-   end
+  end
 end
-
 
 return M
