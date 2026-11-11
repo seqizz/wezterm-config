@@ -1,53 +1,35 @@
--- One-key mid-session sync for llm-custody jail sessions.
+-- llm-custody jail integration: mid-session sync, toolbox provisioning,
+-- answering package requests, and the jail tab badge.
 --
--- The jail runner (bubblewrap sandbox around a coding agent) hands the
--- sandbox a *copy* of the workspace and of every read-write extra mount, so
--- nothing the agent writes reaches the real tree until it is reviewed. That
--- review normally happens when the session exits; this binding runs the very
--- same sync-back mid-session, as often as wanted, so finished work can land
--- on the host while the agent keeps going.
---
--- The runner publishes this run's sync command as the 'llm_custody_sync'
--- user var (OSC 1337 SetUserVar, tmux DCS passthrough handled on its side)
--- and clears it when the session ends - same mechanism the snippet capture
--- and the alert_state tab marker use.
---
--- 'llm_custody_state' carries the whole session as a record of key=value
--- lines (state/tool/pid/workspace/git/overlay, plus sync when there is a
--- sync command). That is what M.sync reads, because the absence of a sync
--- command has two very different causes: no jail here at all, or a jail
--- whose trees are bound straight through (--git full without
--- --overlay-workspace), where the host already has everything the agent
--- wrote. The record also makes a key the runner adds later a non-event
--- here: parse_state keeps unknown keys and nothing reads them.
---
--- Two further vars drive M.toolbox below, which prompts for nixpkgs
--- attributes and provisions them into the session's PATH:
--- 'llm_custody_toolbox' (the directory holding that package profile) and
--- 'llm_custody_toolbox_cmd' (the store path of the host-side CLI that fills
--- it, since a `nix run` jail puts nothing on the host's PATH).
---
--- Two further vars drive the tab badge at the bottom of this file:
--- 'llm_custody_jail' (set for the whole session) and 'llm_custody_dirty'
--- (the count of unsynced paths, empty while there are none).
+-- The runner (and, for requests, the session's broker) publishes session
+-- facts as OSC 1337 user vars, tmux DCS passthrough handled on its side,
+-- cleared when the session ends:
+--   llm_custody_state        key=value lines: state/tool/pid/workspace/git/
+--                            overlay, plus sync when a tree is isolated
+--   llm_custody_toolbox      directory of the session's package profile
+--   llm_custody_toolbox_cmd  store path of the host-side CLI (a `nix run`
+--                            jail puts nothing on the host's PATH)
+--   llm_custody_jail         set for the whole session
+--   llm_custody_dirty        unsynced path count, empty while there are none
+--   llm_custody_requests     packages the agent is blocked waiting on, empty
+--                            while there are none
 
 local wezterm = require('wezterm')
 local M = {}
 
--- Both actions below run a command that talks back: the sync prompts y/N per
--- changed tree and reports what it applied, the toolbox install prints a nix
--- build log and the list of commands it added. A bare spawn closes the pane
--- the moment the script exits, taking that report (including a declined sync
--- or a failed build) with it.
---
--- Anything derived from user input is passed as a *positional argument*,
--- never concatenated into `cmd`: `$SHELL -c` would otherwise re-parse a
--- pasted package line as shell syntax.
+-- Where the panes this file spawns go.
+local SPLIT_DIRECTION = 'Down'
+
+-- These commands prompt and report (sync asks y/N per tree, toolbox prints a
+-- nix build log), so the pane has to outlive them; `exit 0` stops a failed
+-- command from making WezTerm hold the pane a second time with its own
+-- message. Caller values are passed as positional arguments, never
+-- concatenated into cmd, so `$SHELL -c` cannot re-parse them as shell syntax.
 local function hold_open(cmd, label, ...)
   local args = {
     os.getenv('SHELL') or '/bin/sh',
     '-c',
-    cmd .. '; printf "\\n[' .. label .. ' finished, press enter to close]"; read -r _',
+    cmd .. '; printf "\\n[' .. label .. ' finished, press enter to close]"; read -r _; exit 0',
     -- $0 for the -c script; the caller's values start at $1.
     'llm-custody',
   }
@@ -57,10 +39,8 @@ local function hold_open(cmd, label, ...)
   return args
 end
 
--- 'llm_custody_state' into a table. Splits on the first '=' only, so a value
--- may contain any number of them (paths legitimately do). Unknown keys are
--- kept and simply never read, which is what lets the runner grow the record
--- without a matching change here.
+-- Splits on the first '=' only, since values are paths. Unknown keys are kept
+-- and never read, so the runner can grow the record without a change here.
 local function parse_state(raw)
   if not raw or raw == '' then
     return nil
@@ -79,9 +59,8 @@ M.sync = wezterm.action_callback(function(window, pane)
   local vars = pane:get_user_vars()
   local st = parse_state(vars.llm_custody_state)
   if not st then
-    -- A session started by a runner from before the record existed still
-    -- publishes the bare sync path, and outlives the rebuild that replaced
-    -- its runner. Treat that path as a one-key record.
+    -- A runner predating the state record publishes only the bare sync path,
+    -- and its session outlives the rebuild that replaced it.
     local legacy = vars.llm_custody_sync
     if not legacy or legacy == '' then
       window:toast_notification('llm-custody', 'no live jail session in this pane', nil, 3000)
@@ -91,8 +70,8 @@ M.sync = wezterm.action_callback(function(window, pane)
   end
   local sync = st.sync
   if not sync or sync == '' then
-    -- Live jail, nothing isolated from the host: there is no sync-back to
-    -- run because the changes are already in the real tree.
+    -- Live jail with nothing isolated from the host: the changes are already
+    -- in the real tree, there is no sync-back to run.
     window:toast_notification(
       'llm-custody',
       ('nothing to sync - --git %s writes straight to %s'):format(st.git or '?', st.workspace or 'the host tree'),
@@ -101,8 +80,7 @@ M.sync = wezterm.action_callback(function(window, pane)
     )
     return
   end
-  -- The user var survives ssh, the runtime dir it points at does not: a jail
-  -- running on a remote host advertises a path that exists only there.
+  -- The user var survives ssh, the runtime dir it points at does not.
   local f = io.open(sync, 'r')
   if not f then
     window:toast_notification('llm-custody', 'sync command is not on this host: ' .. sync, nil, 5000)
@@ -112,7 +90,7 @@ M.sync = wezterm.action_callback(function(window, pane)
   -- SplitPane rather than SplitVertical: only the former takes a size.
   window:perform_action(
     wezterm.action.SplitPane({
-      direction = 'Down',
+      direction = SPLIT_DIRECTION,
       command = { args = hold_open('"$1"', 'llm-custody sync', sync) },
       size = { Percent = 35 },
     }),
@@ -120,21 +98,12 @@ M.sync = wezterm.action_callback(function(window, pane)
   )
 end)
 
--- Provision a package into the jail's PATH, mid-session.
---
--- Inside the sandbox /nix/store is read-only and no binary cache is in the
--- domain whitelist, so the agent cannot install anything - `nix build`,
--- `nix-shell` and comma all fail there. It is told to ask instead, ending a
--- reply with `required packages: <nixpkgs attrs>`. This is the other half of
--- that exchange: prompt, build on the host, done.
---
--- The whole request line can be pasted verbatim - llm-custody-toolbox strips
--- the labels and commas - so answering is a copy, a paste and a return.
---
--- The install lands in the session's profile while it keeps running: the
--- toolbox is a live bind, so the next PATH lookup inside the jail finds the
--- new binary. Nothing restarts, which is the point - the agent asked for a
--- tool mid-task and can carry on with it.
+-- Provision a package into the running jail's PATH. The sandbox cannot
+-- install anything itself (/nix/store read-only, no binary cache whitelisted),
+-- so the agent asks by ending a reply with `required packages: <attrs>`; that
+-- whole line can be pasted here, llm-custody-toolbox strips labels and commas.
+-- The toolbox is a live bind, so the next PATH lookup inside the jail finds
+-- the new binary and nothing restarts.
 M.toolbox = wezterm.action_callback(function(window, pane)
   local vars = pane:get_user_vars()
   local dir = vars.llm_custody_toolbox
@@ -142,20 +111,15 @@ M.toolbox = wezterm.action_callback(function(window, pane)
     window:toast_notification('llm-custody', 'no live jail session in this pane', nil, 3000)
     return
   end
-  -- The runner publishes the provisioning CLI's own store path, because the
-  -- documented way to start a jail is `nix run .#pi`, which installs nothing
-  -- on the host - there is no llm-custody-toolbox on PATH to call. The bare
-  -- name is only a fallback for a runner predating that var.
+  -- Bare name is only a fallback for a runner predating the _cmd var.
   local cmd = vars.llm_custody_toolbox_cmd
   if not cmd or cmd == '' then
     cmd = 'llm-custody-toolbox'
   end
-  -- Same reason the sync action probes its path: the user var survives ssh,
-  -- the directory it names does not, so a jail on a remote host would
-  -- otherwise have llm-custody-toolbox mkdir a stray local copy and build
-  -- into it. io.open works as an existence test here because the C fopen
-  -- underneath it opens a directory in read mode and only returns nil when
-  -- the path is absent.
+  -- Same ssh reason as M.sync; without the probe a remote jail would have
+  -- llm-custody-toolbox mkdir a stray local toolbox and build into it.
+  -- io.open works as an existence test because the C fopen underneath opens a
+  -- directory in read mode and only returns nil when the path is absent.
   local d = io.open(dir, 'r')
   if not d then
     window:toast_notification('llm-custody', 'toolbox is not on this host: ' .. dir, nil, 5000)
@@ -172,7 +136,7 @@ M.toolbox = wezterm.action_callback(function(window, pane)
         end
         inner_window:perform_action(
           wezterm.action.SplitPane({
-            direction = 'Down',
+            direction = SPLIT_DIRECTION,
             command = {
               args = hold_open(
                 '"$1" --dir "$2" add "$3"',
@@ -192,47 +156,54 @@ M.toolbox = wezterm.action_callback(function(window, pane)
   )
 end)
 
--- Tab badge: marks a tab as jailed, and shows how much work is sitting in
--- the jail unsynced.
+-- Answer the package requests a jailed agent is blocked on. The picker lives
+-- in llm-custody-toolbox (`answer`), so this only finds the session's CLI.
+M.requests = wezterm.action_callback(function(window, pane)
+  local vars = pane:get_user_vars()
+  local cmd = vars.llm_custody_toolbox_cmd
+  if not cmd or cmd == '' then
+    -- No jail in this pane at all, as opposed to a runner too old to publish
+    -- the store path.
+    if not vars.llm_custody_jail or vars.llm_custody_jail == '' then
+      window:toast_notification('llm-custody', 'no live jail session in this pane', nil, 3000)
+      return
+    end
+    cmd = 'llm-custody-toolbox'
+  end
+  window:perform_action(
+    wezterm.action.SplitPane({
+      direction = SPLIT_DIRECTION,
+      command = { args = hold_open('"$1" answer', 'llm-custody requests', cmd) },
+      size = { Percent = 35 },
+    }),
+    pane
+  )
+end)
+
+-- Tab badge: marks a tab as jailed and whether work is waiting there.
 --
--- The count is the part that earns its cells. A jail copy holding finished
--- work looks exactly like one holding none, and without this the first
--- moment that difference surfaces is the sync prompt at exit - long after
--- the point where you would have wanted to land it and keep going.
+-- Only the glyph is taken from 'llm_custody_jail', not the whole value
+-- ('▥ pi'): the tool name is already in the pane title.
 --
--- Only the marker glyph is taken from 'llm_custody_jail', not the whole
--- value ('▥ pi'): the tab bar is tight and the tool name is already in the
--- pane title.
+-- Constant width, state in the color rather than the count in the text. A
+-- badge that gains a cell when the count crosses 9 reflows every tab in the
+-- bar (tab.lua's grow-to-need sizing) each time the agent writes a file, and
+-- a wider badge hits the point where titles can no longer shrink sooner. The
+-- exact number is in the sync pane and `llm-custody-sync --list`.
 --
--- The badge is deliberately constant width, carrying the *state* in its
--- color rather than the count in its text. Two reasons, both about the
--- grow-to-need sizing in tab.lua: a badge that gains a cell when the count
--- crosses 9 reflows every tab in the bar, and it does so every time the
--- agent writes a file - and the wider the badge, the sooner the whole bar
--- hits the point where titles can no longer shrink to absorb it. The exact
--- number is a detail, available in the sync pane and from
--- `llm-custody-sync --list`; what belongs in a tab bar is whether there is
--- anything waiting at all.
 -- U+25A5 rather than a CJK glyph: it is East Asian Ambiguous, so WezTerm
--- gives it one column (ambiguous defaults to narrow) instead of the two a
--- fullwidth character claims. Halves what the badge costs every jailed tab
--- in a bar that is already fighting over cells. badge_width() measures it
--- with column_width rather than assuming, so this stays correct even under
+-- gives it one column instead of the two a fullwidth character claims.
+-- badge_width() measures instead of assuming, so this survives
 -- treat_east_asian_ambiguous_width_as_wide.
 local MARK = '▥'
 
--- Gruvbox bright green to be seen, same palette as tab.lua's ALERT_STATES.
+-- Same palette as tab.lua's ALERT_STATES.
 local DIRTY_COLOR = '#03fc52'
+local REQUEST_COLOR = '#fe8019'
 
-M.dirty_color = DIRTY_COLOR
-
--- Returns (badge, dirty) for a TabInformation, or nil when the tab is not a
--- jail session. `dirty` tells the caller whether to paint it.
---
--- Reads the tab's *active* pane only - same limitation as alert_state, since
--- PaneInformation carries no tab_id and format-tab-title only hands over the
--- active tab's pane list. A jail running in a background split of another
--- tab therefore does not badge that tab.
+-- Active pane only - PaneInformation carries no tab_id and format-tab-title
+-- hands over the active tab's panes, so a jail in a background split of
+-- another tab does not badge it (same limitation as alert_state).
 function M.tab_badge(tab_info)
   local pane = tab_info.active_pane
   if not pane then
@@ -243,17 +214,20 @@ function M.tab_badge(tab_info)
   if not jail or jail == '' then
     return nil
   end
-  local dirty = vars.llm_custody_dirty
-  -- The runner clears the var rather than sending '0', but tolerate both:
-  -- a consumer that writes the file-based count straight into the var would
-  -- otherwise badge every clean session as dirty.
-  return MARK, (dirty ~= nil and dirty ~= '' and dirty ~= '0')
+  local function pending(v)
+    return v ~= nil and v ~= '' and v ~= '0'
+  end
+  if pending(vars.llm_custody_requests) then
+    return MARK, REQUEST_COLOR
+  end
+  if pending(vars.llm_custody_dirty) then
+    return MARK, DIRTY_COLOR
+  end
+  return MARK, nil
 end
 
--- Cells the badge claims, including the space separating it from the title.
--- tab.lua's grow-to-need sizing budgets title width from the decoration
--- width of every tab, so a badge that is not counted here would push the
--- last tab's title past the edge of the bar.
+-- Includes the separating space: tab.lua budgets title width from every tab's
+-- decoration width, so an uncounted badge pushes the last title off the bar.
 function M.badge_width(tab_info)
   local badge = M.tab_badge(tab_info)
   if not badge then

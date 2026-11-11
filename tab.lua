@@ -1,8 +1,5 @@
 local wezterm = require('wezterm')
 local utils = require('utils')
--- Owns the jail badge (marker + unsynced-change count); see its tab_badge /
--- badge_width. Required here as well as in keys-common.lua - require caches,
--- so both get the same module regardless of load order.
 local llm_custody = require('llm-custody')
 
 local MAX_TAB_WIDTH = 9999 -- no hard cap, let wezterm distribute available space across tabs
@@ -282,13 +279,10 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
   }
 
   -- Jail badge sits between the icon and the title, as its own segment
-  -- rather than glued onto the title string: it must keep its own color,
-  -- and it must never be what truncate_right eats when the bar is tight.
-  -- Its cells are already reserved by tab_fixed_width above.
-  local badge, badge_dirty = llm_custody.tab_badge(tab)
+  local badge, badge_color = llm_custody.tab_badge(tab)
   if badge then
-    if badge_dirty then
-      table.insert(elements, { Foreground = { Color = llm_custody.dirty_color } })
+    if badge_color then
+      table.insert(elements, { Foreground = { Color = badge_color } })
       table.insert(elements, { Text = badge })
       table.insert(elements, { Foreground = { Color = foreground } })
     else

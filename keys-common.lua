@@ -2,8 +2,8 @@ local wezterm = require('wezterm')
 -- requiring the module registers its 'user-var-changed' capture handler and
 -- exposes the picker action bound below (Ctrl-Shift-S)
 local snippets = require('snippets')
--- mid-session sync for a jailed coding agent, keyed off the
--- 'llm_custody_sync' user var the jail runner publishes
+-- jail session actions (sync, toolbox, requests) plus the tab badge tab.lua
+-- renders, all driven by the user vars the runner and its broker publish
 local llm_custody = require('llm-custody')
 function concat_table(t1, t2)
   for i = 1, #t2 do
@@ -43,19 +43,18 @@ common_keys = {
   --   plain      -> inject the Shift-F5 sequence the zsh bindkey captures on
   --   Ctrl       -> open the snippet picker
   --   Ctrl+Shift -> promote a captured snippet into the vimwiki cheatsheet
-  --   Alt        -> sync a running llm-custody jail session back to the host
-  --   Ctrl+Alt   -> add a package to that session's toolbox (its PATH)
   { key = 'raw:195', action = wezterm.action.SendString('\x1b[15;2~') },
   { key = 'raw:195', mods = 'CTRL', action = snippets.picker },
   { key = 'raw:195', mods = 'CTRL|SHIFT', action = snippets.promote },
-  { key = 'raw:195', mods = 'ALT', action = llm_custody.sync },
-  { key = 'raw:195', mods = 'CTRL|ALT', action = llm_custody.toolbox },
   { key = 'F12', mods = 'CTRL|SHIFT', action = snippets.picker },
   { key = 'F12', mods = 'CTRL|SHIFT|ALT', action = snippets.promote },
-  -- Keyboard-independent aliases for the launch-key bindings above (F-keys
-  -- are taken at WM level here)
+  -- llm-custody jail session, acting on the pane the agent runs in: sync its
+  -- work back to the host, add a package to its toolbox (and so its PATH),
+  -- answer the package requests it is blocked on. Plain letters rather than
+  -- F-keys, which are taken at WM level here.
   { key = 's', mods = 'CTRL|SHIFT', action = llm_custody.sync },
   { key = 'a', mods = 'CTRL|SHIFT', action = llm_custody.toolbox },
+  { key = 'r', mods = 'CTRL|SHIFT', action = llm_custody.requests },
   -- Alt-c to "click" links without mouse
   {
     key = 'c',
