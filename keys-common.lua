@@ -50,11 +50,14 @@ common_keys = {
   { key = 'F12', mods = 'CTRL|SHIFT|ALT', action = snippets.promote },
   -- llm-custody jail session, acting on the pane the agent runs in: sync its
   -- work back to the host, add a package to its toolbox (and so its PATH),
-  -- answer the package requests it is blocked on. Plain letters rather than
-  -- F-keys, which are taken at WM level here.
+  -- answer the package and mount requests it is blocked on, attach or
+  -- detach a host directory, manage the domains it may reach. Plain letters
+  -- rather than F-keys, which are taken at WM level here.
   { key = 's', mods = 'CTRL|SHIFT', action = llm_custody.sync },
   { key = 'a', mods = 'CTRL|SHIFT', action = llm_custody.toolbox },
   { key = 'r', mods = 'CTRL|SHIFT', action = llm_custody.requests },
+  { key = 'm', mods = 'CTRL|SHIFT', action = llm_custody.mount },
+  { key = 'd', mods = 'CTRL|SHIFT', action = llm_custody.domain },
   -- Alt-c to "click" links without mouse
   {
     key = 'c',
