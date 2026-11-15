@@ -207,6 +207,14 @@ wezterm.on('format-tab-title', function(tab, tabs, panes, config, hover, max_wid
     foreground = '#1c1b19'
   end
 
+  -- A pending jail request outranks alert_state and has no unread semantics:
+  -- the agent stays blocked whether or not the tab was looked at, so the tab
+  -- stays red, focused included, until the queue drains.
+  if llm_custody.request_pending(tab) then
+    background = llm_custody.REQUEST_BACKGROUND
+    foreground = '#1c1b19'
+  end
+
   local left_arrow = SOLID_LEFT_ARROW
   if tab.tab_index == 0 then
     left_arrow = SOLID_LEFT_MOST

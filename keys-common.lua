@@ -22,7 +22,6 @@ common_keys = {
   { key = 'Tab', mods = 'SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'LeftArrow', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'F', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
-  { key = 'P', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
 
   { key = 'Return', mods = 'ALT', action = 'DisableDefaultAssignment' },
   { key = 'n', mods = 'SUPER', action = 'DisableDefaultAssignment' },
@@ -49,12 +48,15 @@ common_keys = {
   { key = 'F12', mods = 'CTRL|SHIFT', action = snippets.picker },
   { key = 'F12', mods = 'CTRL|SHIFT|ALT', action = snippets.promote },
   -- llm-custody jail session, acting on the pane the agent runs in: sync its
-  -- work back to the host, add a package to its toolbox (and so its PATH),
-  -- answer the package and mount requests it is blocked on, attach or
-  -- detach a host directory, manage the domains it may reach. Plain letters
+  -- work back to the host, add, remove or pin the packages in its toolbox
+  -- (and so on its PATH), answer the package and mount requests it is
+  -- blocked on, attach or detach a host directory, manage the domains it
+  -- may reach. Plain letters
   -- rather than F-keys, which are taken at WM level here.
   { key = 's', mods = 'CTRL|SHIFT', action = llm_custody.sync },
-  { key = 'a', mods = 'CTRL|SHIFT', action = llm_custody.toolbox },
+  -- Ctrl+Shift+p is the default command palette; binding it here replaces
+  -- that assignment, which this config never used.
+  { key = 'p', mods = 'CTRL|SHIFT', action = llm_custody.packages },
   { key = 'r', mods = 'CTRL|SHIFT', action = llm_custody.requests },
   { key = 'm', mods = 'CTRL|SHIFT', action = llm_custody.mount },
   { key = 'd', mods = 'CTRL|SHIFT', action = llm_custody.domain },
