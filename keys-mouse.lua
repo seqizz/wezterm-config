@@ -1,7 +1,12 @@
 local wezterm = require('wezterm')
--- TODO: make this relative to the current file, fucking lua
-dofile(wezterm.config_dir .. '/keys-common.lua') -- brings "common_keys" into scope
-mux_keys = {
+local common = require('keys-common')
+
+local close_copy_mode = wezterm.action.Multiple({
+  wezterm.action.CopyMode('Close'),
+  wezterm.action.ScrollToBottom,
+})
+
+local mux_keys = {
   {
     key = '-',
     mods = 'ALT',
@@ -25,15 +30,6 @@ mux_keys = {
   { key = 's', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Down', 2 } }) },
   { key = 'w', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Up', 2 } }) },
   { key = 'd', mods = 'ALT', action = wezterm.action({ AdjustPaneSize = { 'Right', 2 } }) },
-  { key = '1', mods = 'ALT', action = wezterm.action.ActivateTab(0) },
-  { key = '2', mods = 'ALT', action = wezterm.action.ActivateTab(1) },
-  { key = '3', mods = 'ALT', action = wezterm.action.ActivateTab(2) },
-  { key = '4', mods = 'ALT', action = wezterm.action.ActivateTab(3) },
-  { key = '5', mods = 'ALT', action = wezterm.action.ActivateTab(4) },
-  { key = '6', mods = 'ALT', action = wezterm.action.ActivateTab(5) },
-  { key = '7', mods = 'ALT', action = wezterm.action.ActivateTab(6) },
-  { key = '8', mods = 'ALT', action = wezterm.action.ActivateTab(7) },
-  { key = '9', mods = 'ALT', action = wezterm.action.ActivateTab(8) },
   { key = 'k', mods = 'ALT', action = wezterm.action.CloseCurrentTab({ confirm = true }) },
   { key = 'z', mods = 'ALT', action = 'TogglePaneZoomState' },
   {
@@ -54,9 +50,12 @@ mux_keys = {
   -- {key="DownArrow", mods="CTRL|SHIFT", action=wezterm.action{EmitEvent="move-down"}},
   -- mux reference end
 }
-return {
+for i = 1, 9 do
+  table.insert(mux_keys, { key = tostring(i), mods = 'ALT', action = wezterm.action.ActivateTab(i - 1) })
+end
 
-  keys = concat_table(mux_keys, common_keys),
+return {
+  keys = common.concat(mux_keys, common.keys),
 
   key_tables = {
     copy_mode = {
@@ -80,43 +79,15 @@ return {
         mods = 'SHIFT',
         action = wezterm.action.CopyMode({ SetSelectionMode = 'Line' }),
       },
-      {
-        key = 'Escape',
-        mods = 'NONE',
-        action = wezterm.action.Multiple({
-          wezterm.action.CopyMode('Close'),
-          wezterm.action.ScrollToBottom,
-        }),
-      },
+      { key = 'Escape', mods = 'NONE', action = close_copy_mode },
       {
         key = '?',
         mods = 'SHIFT',
         action = wezterm.action.Search('CurrentSelectionOrEmptyString'),
       },
-      {
-        key = 'c',
-        mods = 'CTRL',
-        action = wezterm.action.Multiple({
-          wezterm.action.CopyMode('Close'),
-          wezterm.action.ScrollToBottom,
-        }),
-      },
-      {
-        key = 'Enter',
-        mods = 'NONE',
-        action = wezterm.action.Multiple({
-          wezterm.action.CopyMode('Close'),
-          wezterm.action.ScrollToBottom,
-        }),
-      },
-      {
-        key = 'Escape',
-        mods = 'ALT',
-        action = wezterm.action.Multiple({
-          wezterm.action.CopyMode('Close'),
-          wezterm.action.ScrollToBottom,
-        }),
-      },
+      { key = 'c', mods = 'CTRL', action = close_copy_mode },
+      { key = 'Enter', mods = 'NONE', action = close_copy_mode },
+      { key = 'Escape', mods = 'ALT', action = close_copy_mode },
       { key = 'LeftArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveLeft' }) },
       { key = 'RightArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveRight' }) },
       { key = 'UpArrow', mods = 'NONE', action = wezterm.action({ CopyMode = 'MoveUp' }) },

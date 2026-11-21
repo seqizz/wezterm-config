@@ -403,6 +403,40 @@ local function mount_pane(window, pane, launcher, ...)
   )
 end
 
+-- Asks for the host path of a new mount in a split and attaches it there.
+-- A split because the path is read with readline (`read -e`), which is what
+-- gives tab completion on host paths; wezterm's own PromptInputLine has no
+-- completion. bash by name: `read -e` is a bash builtin, and $SHELL may be
+-- anything. $1 is the launcher and $2 the mode, the typed path is only ever
+-- expanded inside quotes, so it stays one argument. The pane closes by
+-- itself after a successful mount and stays open on a failure, whose
+-- message would otherwise vanish with it.
+local MOUNT_PROMPT_SCRIPT = [==[
+l="$1"; mode="$2"
+IFS= read -e -r -p "host path to mount ($mode), tab completes, empty cancels: " p || exit 0
+while [ "${p% }" != "$p" ]; do p="${p% }"; done
+[ -n "$p" ] || exit 0
+case "$p" in "~" | "~/"*) p="$HOME${p#\~}" ;; esac
+if out=$("$l" add --mode "$mode" -- "$p"); then
+  printf 'mounted %s at %s\n' "$p" "${out%%$'\t'*}"
+  sleep 1.5
+else
+  printf '\n[mount failed, press enter to close]'
+  read -r _
+fi
+]==]
+
+local function mount_prompt_pane(window, pane, launcher, mode)
+  window:perform_action(
+    wezterm.action.SplitPane({
+      direction = SPLIT_DIRECTION,
+      command = { args = { 'bash', '-c', MOUNT_PROMPT_SCRIPT, 'llm-custody', launcher, mode } },
+      size = { Percent = 35 },
+    }),
+    pane
+  )
+end
+
 -- The last non-blank line of a launcher's stderr: its own statement of what
 -- went wrong, short enough for a toast.
 local function last_line(text)
@@ -422,16 +456,15 @@ local MOUNT_DIRECT_MODES = { ro = true, full = true }
 
 -- Attach a host tree to the running jail, or detach one. One picker: the
 -- session's current mounts (pick one to remove it) plus an "add" row that
--- asks for the path and then the mode. The mode is asked rather than typed
--- on the same line because read-only has to be the answer of least effort,
--- and `full` deserves to be read before it is chosen.
+-- asks for the mode and then the path. The mode is picked from a list
+-- rather than typed because read-only has to be the answer of least effort,
+-- and `full` deserves to be read before it is chosen; the path is typed in
+-- a split, where it has tab completion (mount_prompt_pane).
 --
--- The picker comes back after every action that finishes in place (any add,
--- and removing a direct bind), re-read from disk, so several mounts can be
--- handled from one keypress; escape on the list leaves, escape below it goes
--- back to the list. Removing a copy or an overlay is the exception: it
--- prompts for the sync-back in a split of its own, and the picker ends
--- there.
+-- The picker comes back after removing a direct bind, re-read from disk;
+-- escape on the list leaves, escape below it goes back to the list. An add,
+-- and removing a copy or an overlay (which prompts for the sync-back), run
+-- in a split of their own, and the picker ends there.
 local function show_mounts(window, pane, launcher)
   local function back(w, p) show_mounts(w, p, launcher) end
 
@@ -489,34 +522,15 @@ local function show_mounts(window, pane, launcher)
           return
         end
         inner_window:perform_action(
-          wezterm.action.PromptInputLine({
-            description = 'host path to mount (lands under /workspace, named after its last component):',
-            action = wezterm.action_callback(function(w2, p2, line)
-              if not line or line:match('^%s*$') then
+          wezterm.action.InputSelector({
+            title = 'mode for the new mount  - the host path is asked next, esc to go back',
+            choices = MOUNT_MODES,
+            action = wezterm.action_callback(function(w2, p2, mode)
+              if mode then
+                mount_prompt_pane(w2, p2, launcher, mode)
+              else
                 back(w2, p2)
-                return
               end
-              -- extra parens: drop gsub's 2nd return (count), same trap as
-              -- snippets.lua
-              local path = (line:gsub('^%s+', ''):gsub('%s+$', ''))
-              w2:perform_action(
-                wezterm.action.InputSelector({
-                  title = 'mode for ' .. path .. '  - esc to go back',
-                  choices = MOUNT_MODES,
-                  action = wezterm.action_callback(function(w3, p3, mode)
-                    if mode then
-                      if not MOUNT_DIRECT_MODES[mode] then
-                        -- A copy of a large tree takes a while and prints
-                        -- nothing until it is done.
-                        w3:toast_notification('llm-custody', 'copying ' .. path .. ' ...', nil, 3000)
-                      end
-                      in_place(w3, ('mounted %s (%s)'):format(path, mode), 'add', '--mode', mode, '--', path)
-                    end
-                    back(w3, p3)
-                  end),
-                }),
-                p2
-              )
             end),
           }),
           inner_pane
@@ -854,7 +868,6 @@ end)
 -- treat_east_asian_ambiguous_width_as_wide.
 local MARK = '▥'
 
--- Same palette as tab.lua's ALERT_STATES.
 local DIRTY_COLOR = '#03fc52'
 -- Background of a tab whose agent is blocked on a request: the red of
 -- ALERT_STATES.waiting, since both mean "nothing moves until you answer".

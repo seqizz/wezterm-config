@@ -1,7 +1,7 @@
 return {
   colors = {
     foreground = '#d0d0d0',
-    background = '#212121',
+    background = '#282828',
     cursor_bg = '#d0d0d0',
     cursor_border = '#d0d0d0',
     cursor_fg = '#151515',

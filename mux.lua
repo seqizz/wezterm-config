@@ -1,8 +1,10 @@
+local wezterm = require('wezterm')
+
 return {
   unix_domains = {
     {
       name = 'default',
-      socket_path = '/home/gurkan/.wezterm.sock',
+      socket_path = wezterm.home_dir .. '/.wezterm.sock',
       connect_automatically = false,
     },
   },

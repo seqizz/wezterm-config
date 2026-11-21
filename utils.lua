@@ -1,30 +1,24 @@
-local wezterm = require('wezterm')
 local M = {}
 
---- Merges two tables, overwriting common elements from table_b
+--- Copies every table in `...` into `target`, later tables winning on key
+--- collisions. `target` is filled in place (it may be a config_builder object,
+--- which validates keys on assignment) and returned.
+--- @param target table
 --- @param ... table[]
 --- @return table
-function M.merge(...)
+function M.merge(target, ...)
   local args = table.pack(...)
-  local merged = {}
 
   for i = 1, args.n do
     if type(args[i]) == 'string' then
       error(args[i])
     end
     for k, v in pairs(args[i]) do
-      merged[k] = v
+      target[k] = v
     end
   end
 
-  return merged
-end
-
---- @param module string
---- @return any
-function M.req(module)
-  local m = require(module)
-  return m
+  return target
 end
 
 --- Returns a new list with function applied to each element of the list

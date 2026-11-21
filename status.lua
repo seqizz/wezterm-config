@@ -1,7 +1,6 @@
 local M = {}
 
 local wezterm = require('wezterm')
-local utils = require('utils')
 
 local function render_battery(battery, fg_color)
   local icons = wezterm.nerdfonts
@@ -28,66 +27,47 @@ local function render_battery(battery, fg_color)
   return formatted, plain
 end
 
+-- One left-status block: its drawn form plus the plain text tab.lua's width
+-- math is measured from (wezterm.column_width would count escape bytes in the
+-- formatted string).
+local function indicator(bg, text)
+  return {
+    text = wezterm.format({
+      { Attribute = { Intensity = 'Bold' } },
+      { Background = { AnsiColor = bg } },
+      { Foreground = { AnsiColor = 'White' } },
+      { Text = text },
+    }),
+    plain = text,
+  }
+end
+
 local function update_left_status(window, pane)
   local key_table = window:active_key_table()
   local indicators = {}
 
   if key_table == 'copy_mode' then
-    table.insert(
-      indicators,
-      wezterm.format({
-        { Attribute = { Intensity = 'Bold' } },
-        { Background = { AnsiColor = 'Red' } },
-        { Foreground = { AnsiColor = 'White' } },
-        { Text = ' ' .. wezterm.nerdfonts['md_content_copy'] .. ' COPY ' },
-      })
-    )
+    table.insert(indicators, indicator('Red', ' ' .. wezterm.nerdfonts['md_content_copy'] .. ' COPY '))
   elseif key_table == 'search_mode' then
-    table.insert(
-      indicators,
-      wezterm.format({
-        { Attribute = { Intensity = 'Bold' } },
-        { Background = { AnsiColor = 'Blue' } },
-        { Foreground = { AnsiColor = 'White' } },
-        { Text = ' SEARCH ' },
-      })
-    )
+    table.insert(indicators, indicator('Blue', ' SEARCH '))
   end
 
   -- zoom state lives on PaneInformation, not Pane userdata
-  local tab = window:active_tab()
-  for _, p in ipairs(tab:panes_with_info()) do
+  for _, p in ipairs(window:active_tab():panes_with_info()) do
     if p.is_zoomed then
-      table.insert(
-        indicators,
-        wezterm.format({
-          { Attribute = { Intensity = 'Bold' } },
-          { Background = { AnsiColor = 'Blue' } },
-          { Foreground = { AnsiColor = 'White' } },
-          { Text = ' ' .. wezterm.nerdfonts['md_magnify_plus'] .. ' ZOOM ' },
-        })
-      )
+      table.insert(indicators, indicator('Blue', ' ' .. wezterm.nerdfonts['md_magnify_plus'] .. ' ZOOM '))
       break
     end
   end
 
-  window:set_left_status(table.concat(indicators, ''))
-
-  -- Track visible width of left status for the grow-to-fill tab sizing (tab.lua).
-  -- Each indicator block has a known plain-text form; recompute rather than
-  -- storing escapes since wezterm.column_width would count the escape bytes.
+  local drawn = {}
   local lw = 0
-  if key_table == 'copy_mode' then
-    lw = lw + wezterm.column_width(' ' .. wezterm.nerdfonts['md_content_copy'] .. ' COPY ')
-  elseif key_table == 'search_mode' then
-    lw = lw + wezterm.column_width(' SEARCH ')
+  for _, ind in ipairs(indicators) do
+    drawn[#drawn + 1] = ind.text
+    lw = lw + wezterm.column_width(ind.plain)
   end
-  for _, p in ipairs(tab:panes_with_info()) do
-    if p.is_zoomed then
-      lw = lw + wezterm.column_width(' ' .. wezterm.nerdfonts['md_magnify_plus'] .. ' ZOOM ')
-      break
-    end
-  end
+  window:set_left_status(table.concat(drawn, ''))
+  -- Visible width of left status for the grow-to-fill tab sizing (tab.lua)
   wezterm.GLOBAL.lstatus_w = lw
 end
 
@@ -162,7 +142,7 @@ local function update_right_status(window, pane)
 end
 
 function M.enable()
-  wezterm.on('update-right-status', function(window, pane)
+  wezterm.on('update-status', function(window, pane)
     update_left_status(window, pane)
     update_right_status(window, pane)
   end)

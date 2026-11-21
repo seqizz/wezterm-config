@@ -1,17 +1,25 @@
 local wezterm = require('wezterm')
 -- requiring the module registers its 'user-var-changed' capture handler and
--- exposes the picker action bound below (Ctrl-Shift-S)
+-- exposes the picker/promote actions bound below
 local snippets = require('snippets')
 -- jail session actions (sync, toolbox, requests) plus the tab badge tab.lua
 -- renders, all driven by the user vars the runner and its broker publish
 local llm_custody = require('llm-custody')
-function concat_table(t1, t2)
+
+local M = {}
+
+-- Appends t2 onto t1 in place and returns t1
+function M.concat(t1, t2)
   for i = 1, #t2 do
     t1[#t1 + 1] = t2[i]
   end
   return t1
 end
-common_keys = {
+
+-- Shared by the normal key set (keys-mouse.lua) and the tmux one
+-- (tmux-switch.lua). Both concat onto their own table, so this one is never
+-- mutated and is safe to share through require's cache.
+M.keys = {
   -- Turn off the defaults
   { key = ' ', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'Enter', mods = 'ALT', action = 'DisableDefaultAssignment' },
@@ -23,7 +31,6 @@ common_keys = {
   { key = 'LeftArrow', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
   { key = 'F', mods = 'CTRL|SHIFT', action = 'DisableDefaultAssignment' },
 
-  { key = 'Return', mods = 'ALT', action = 'DisableDefaultAssignment' },
   { key = 'n', mods = 'SUPER', action = 'DisableDefaultAssignment' },
   { key = 'x', mods = 'ALT', action = 'QuickSelect' },
   { key = '+', mods = 'CTRL', action = 'IncreaseFontSize' },
@@ -83,3 +90,5 @@ common_keys = {
     }),
   },
 }
+
+return M

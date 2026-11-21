@@ -8,8 +8,6 @@ local MAX_TITLE_CAP = 24 -- most title cells a single tab will ever claim
 local MIN_TITLE = 2 -- floor for the title text budget when tabs must shrink to fit
 
 local CONFIG = {
-  padding = 1,
-  use_icons = true,
   use_icon_colors = false, -- TODO: fucks up foreground color of the text
 }
 
@@ -19,11 +17,6 @@ local tab_icons = {}
 local function ansi(c) return { AnsiColor = c } end
 
 local function css(c) return { Color = c } end
-
-local sep = wezterm.format({
-  { Foreground = { AnsiColor = 'Fuchsia' } },
-  { Text = '┊' },
-})
 
 local icon_variants = utils.map({
   { 'dev_coda', css('#3A5F0B') },
@@ -113,28 +106,6 @@ local SOLID_LEFT_ARROW = utf8.char(0xe0ba)
 local SOLID_LEFT_MOST = utf8.char(0x2588)
 local SOLID_RIGHT_ARROW = utf8.char(0xe0bc)
 
-local SUP_IDX = {
-  '¹',
-  '²',
-  '³',
-  '⁴',
-  '⁵',
-  '⁶',
-  '⁷',
-  '⁸',
-  '⁹',
-  '¹⁰',
-  '¹¹',
-  '¹²',
-  '¹³',
-  '¹⁴',
-  '¹⁵',
-  '¹⁶',
-  '¹⁷',
-  '¹⁸',
-  '¹⁹',
-  '²⁰',
-}
 local SUB_IDX = {
   '₁',
   '₂',

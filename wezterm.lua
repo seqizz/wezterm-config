@@ -1,3 +1,4 @@
+local wezterm = require('wezterm')
 local utils = require('utils')
 
 require('status').enable()
@@ -14,6 +15,8 @@ local modules = utils.map({
   'keys-mouse',
   'colors',
   'quickselect',
-}, utils.req)
+}, require)
 
-return utils.merge(table.unpack(modules))
+-- config_builder rejects unknown keys, so a typo in any module fails loudly
+-- instead of being silently ignored
+return utils.merge(wezterm.config_builder(), table.unpack(modules))
