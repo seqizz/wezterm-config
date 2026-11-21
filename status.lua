@@ -2,30 +2,10 @@ local M = {}
 
 local wezterm = require('wezterm')
 
-local function render_battery(battery, fg_color)
-  local icons = wezterm.nerdfonts
-  local prefix = 'md_battery'
-  local icon_name
-
-  if battery.state == 'Charging' then
-    icon_name = prefix .. '_charging'
-  elseif battery.state_of_charge > 0.9 then
-    icon_name = prefix
-  else
-    local suffix = math.max(1, math.ceil(battery.state_of_charge * 10)) .. '0'
-    icon_name = prefix .. '_' .. suffix
-  end
-
-  local color = battery.state_of_charge <= 0.1 and 'Red' or 'Green'
-  local plain = icons[icon_name] .. string.format(' %.0f%%', battery.state_of_charge * 100)
-  local formatted = wezterm.format({
-    { Foreground = { AnsiColor = color } },
-    { Text = icons[icon_name] },
-    { Foreground = { Color = fg_color } },
-    { Text = string.format(' %.0f%%', battery.state_of_charge * 100) },
-  })
-  return formatted, plain
-end
+-- window_id -> right status as last handed to wezterm, and its form without
+-- the repaint marker
+local right_sent = {}
+local right_base = {}
 
 -- One left-status block: its drawn form plus the plain text tab.lua's width
 -- math is measured from (wezterm.column_width would count escape bytes in the
@@ -76,27 +56,14 @@ local function update_right_status(window, pane)
   local date = wezterm.strftime('%a %b %-d %H:%M')
   local host = string.format(' %s ', wezterm.hostname())
 
-  local battery, battery_plain
-  for _, b in ipairs(wezterm.battery_info()) do
-    battery, battery_plain = render_battery(b, '#1c1b19')
-  end
-
   local SOLID_LEFT_ARROW = utf8.char(0xe0ba)
   local background = '#d79921'
   local foreground = '#1c1b19'
 
   -- Segments in display order, each carrying both its drawn form and the plain
   -- text the published width is measured from, so the two cannot drift apart.
-  -- A host with no battery reports an empty battery_info list and simply has no
-  -- battery segment: rendering it anyway would put a nil into a { Text = ... }
-  -- element, which wezterm.format rejects, taking the whole right status (and
-  -- with it the rstatus_w that tab.lua sizes tabs against) down with it.
   -- `arrow_fg` colors the arrow drawn *after* the segment.
   local segments = {}
-  if battery then
-    -- NVIDIA workaround.. Most valuable company in the whole world!
-    segments[#segments + 1] = { text = battery, plain = battery_plain, arrow_fg = '#1c1b18' }
-  end
   segments[#segments + 1] = { text = date, plain = date, arrow_fg = foreground }
   segments[#segments + 1] = { text = host, plain = host }
 
@@ -122,11 +89,15 @@ local function update_right_status(window, pane)
     end
   end
 
-  window:set_right_status(wezterm.format(elements))
+  local formatted = wezterm.format(elements)
+  local id = window:window_id()
+  right_base[id] = formatted
+  right_sent[id] = formatted
+  window:set_right_status(formatted)
 
   -- Publish widths + total terminal columns so tab.lua can size tabs to fill.
   -- Two powerline arrows per segment bar the trailing one, plus a space between
-  -- each pair: 5 arrows and 2 spaces for the usual battery/date/host trio.
+  -- each pair: 3 arrows and 1 space for the date/host pair.
   local rw = (2 * #segments - 1) + (#segments - 1)
   for _, seg in ipairs(segments) do
     rw = rw + wezterm.column_width(seg.plain)
@@ -138,6 +109,28 @@ local function update_right_status(window, pane)
   local ok, size = pcall(function() return window:active_tab():get_size() end)
   if ok and size then
     wezterm.GLOBAL.tabbar_cols = size.cols
+  end
+end
+
+-- Makes wezterm call format-tab-title again right away, for tab.lua's switch
+-- animation. wezterm rebuilds the tab bar whenever the status text changes, so
+-- the stored right status is set again with a trailing SGR reset toggled on or
+-- off: a different string that draws the same cells.
+function M.repaint()
+  if not wezterm.gui then
+    return
+  end
+  for _, window in ipairs(wezterm.gui.gui_windows()) do
+    local id = window:window_id()
+    local base = right_base[id]
+    if base then
+      local text = base
+      if right_sent[id] == text then
+        text = text .. '\x1b[0m'
+      end
+      right_sent[id] = text
+      window:set_right_status(text)
+    end
   end
 end
 
